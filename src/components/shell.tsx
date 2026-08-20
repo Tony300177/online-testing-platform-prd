@@ -12,6 +12,7 @@ import {
   LogOut,
   PieChart,
   School,
+  Target,
   UploadCloud,
   Users,
 } from "lucide-react";
@@ -28,6 +29,7 @@ const NAV: NavItem[] = [
   { href: "/professor/cadastro", label: "Cadastro", icon: Building2 },
   { href: "/admin/importar", label: "Importar", icon: UploadCloud },
   { href: "/admin/estatisticas", label: "Estatísticas", icon: PieChart },
+  { href: "/admin/habilidades", label: "Habilidades", icon: Target },
   { href: "/admin/alunos", label: "Alunos", icon: Users },
   { href: "/admin/respostas", label: "Respostas", icon: ListChecks },
 ];

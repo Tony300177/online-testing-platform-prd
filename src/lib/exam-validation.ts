@@ -9,7 +9,7 @@ export type QuestaoInput = {
   pergunta: string;
   tipo: "multiple";
   valor: number;
-  habilidade: string | null;
+  habilidade: string[] | null;
   alternativas: AlternativaInput[];
 };
 
@@ -74,7 +74,9 @@ export function parseProvaPayload(body: unknown): { ok: true; value: ProvaInput 
       const pergunta = asString(item.pergunta);
       const tipo = "multiple";
       const valor = asNumber(item.valor, 1);
-      const habilidade = asString(item.habilidade) || null;
+      const habilidade = Array.isArray(item.habilidade)
+        ? (item.habilidade as unknown[]).filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+        : null;
 
       const rawAlts = Array.isArray(item.alternativas) ? item.alternativas : [];
       const alternativas: AlternativaInput[] = [];

@@ -49,7 +49,7 @@ export default async function EditExamPage({ params }: { params: Promise<{ id: s
         pergunta: q.pergunta,
         tipo: "multiple",
         valor: Number(q.valor) || 1,
-        habilidade: q.habilidade ?? "",
+        habilidade: Array.isArray(q.habilidade) ? q.habilidade : q.habilidade ? [q.habilidade] : [],
         alternativas: (altByQuestao.get(q.id) ?? []).map((a) => ({
           key: `a-${a.id}`,
           texto: a.texto,

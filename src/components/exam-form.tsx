@@ -26,7 +26,7 @@ export type QuestaoDraft = {
   pergunta: string;
   tipo: "multiple";
   valor: number;
-  habilidade: string;
+  habilidade: string[];
   alternativas: AlternativaDraft[];
 };
 
@@ -52,7 +52,7 @@ const EMPTY_QUESTION = (): QuestaoDraft => ({
   pergunta: "",
   tipo: "multiple",
   valor: 1,
-  habilidade: "",
+  habilidade: [],
   alternativas: [
     { key: KEY(), texto: "", correta: false },
     { key: KEY(), texto: "", correta: false },
@@ -209,7 +209,7 @@ export default function ExamForm({
           pergunta: q.pergunta,
           tipo: q.tipo,
           valor: q.valor,
-          habilidade: q.habilidade || null,
+          habilidade: q.habilidade.length > 0 ? q.habilidade : null,
           alternativas: q.alternativas.map((a, i) => ({ letra: String.fromCharCode(65 + i), texto: a.texto, correta: a.correta })),
         }))
       );
@@ -529,10 +529,17 @@ export default function ExamForm({
                               <button
                                 key={h.codigo}
                                 type="button"
-                                onClick={() => updateQuestao(q.key, { habilidade: q.habilidade === h.codigo ? "" : h.codigo })}
+                                onClick={() => {
+                                  const has = q.habilidade.includes(h.codigo);
+                                  updateQuestao(q.key, {
+                                    habilidade: has
+                                      ? q.habilidade.filter((x) => x !== h.codigo)
+                                      : [...q.habilidade, h.codigo],
+                                  });
+                                }}
                                 className={cn(
                                   "rounded-lg border px-2.5 py-1 text-xs font-semibold transition",
-                                  q.habilidade === h.codigo
+                                  q.habilidade.includes(h.codigo)
                                     ? "border-indigo-500 bg-indigo-100 text-indigo-700"
                                     : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50"
                                 )}

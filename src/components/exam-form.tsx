@@ -3,20 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Bold,
   ChevronDown,
   ChevronUp,
   FileText,
-  Italic,
-  List,
-  ListOrdered,
   Loader2,
   Plus,
   Save,
   Send,
   Trash2,
 } from "lucide-react";
-import { renderPrompt } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
 
 export type AlternativaDraft = {
@@ -171,51 +166,11 @@ export default function ExamForm({
     updateQuestao(questaoKey, { alternativas: q.alternativas.filter((a) => a.key !== altKey) });
   }
 
-  /** Aplica negrito/itálico/listas na seleção atual do textarea. */
-  function applyMarkup(kind: "bold" | "italic" | "bullet" | "ordered") {
-    const el = document.activeElement as HTMLTextAreaElement | null;
-    if (!el || el.tagName !== "TEXTAREA") return;
-    const key = el.dataset.qkey;
-    if (!key) return;
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? 0;
-    const value = el.value;
-    const selected = value.slice(start, end);
-
-    let replacement = selected;
-    if (kind === "bold") replacement = selected ? `**${selected}**` : "**negrito**";
-    if (kind === "italic") replacement = selected ? `*${selected}*` : "*itálico*";
-    if (kind === "bullet") {
-      replacement = (selected || "item da lista")
-        .split("\n")
-        .map((l) => `- ${l}`)
-        .join("\n");
-    }
-    if (kind === "ordered") {
-      replacement = (selected || "item da lista")
-        .split("\n")
-        .map((l, i) => `${i + 1}. ${l}`)
-        .join("\n");
-    }
-
-    const next = value.slice(0, start) + replacement + value.slice(end);
-    updateQuestao(key, { pergunta: next });
-
-    requestAnimationFrame(() => {
-      const ta = document.querySelector<HTMLTextAreaElement>(`textarea[data-qkey="${key}"]`);
-      if (ta) {
-        ta.focus();
-        ta.setSelectionRange(start, start + replacement.length);
-      }
-    });
-  }
-
   function validate(requirePublish = false): string {
     if (draft.titulo.trim().length < 3) return "Informe um título para a prova.";
     if (draft.questoes.length === 0) return "Adicione pelo menos uma questão.";
     for (let i = 0; i < draft.questoes.length; i++) {
       const q = draft.questoes[i];
-      if (!q.pergunta.trim()) return `A questão ${i + 1} está sem enunciado.`;
       if (q.valor <= 0) return `A questão ${i + 1} precisa de um valor maior que zero.`;
       if (q.tipo === "multiple") {
         const filled = q.alternativas.filter((a) => a.texto.trim());
@@ -526,27 +481,9 @@ export default function ExamForm({
                       className="w-14 rounded-md border border-slate-200 px-1.5 py-0.5 text-center outline-none focus:border-indigo-400"
                     />
                   </label>
-                  <select
-                    value={q.tipo}
-                    onChange={(e) =>
-                      updateQuestao(q.key, {
-                        tipo: e.target.value === "essay" ? "essay" : "multiple",
-                        alternativas:
-                          e.target.value === "essay"
-                            ? []
-                            : q.alternativas.length >= 2
-                              ? q.alternativas
-                              : [
-                                  { key: KEY(), texto: "", correta: false },
-                                  { key: KEY(), texto: "", correta: false },
-                                ],
-                      })
-                    }
-                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400"
-                  >
-                    <option value="multiple">Múltipla escolha</option>
-                    <option value="essay">Dissertativa</option>
-                  </select>
+                  <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700">
+                    Múltipla escolha
+                  </span>
                   <button
                     onClick={() => moveQuestao(index, -1)}
                     disabled={index === 0}
@@ -574,47 +511,8 @@ export default function ExamForm({
                 </div>
               </div>
 
-              {/* Editor de enunciado */}
-              <div className="mt-3 rounded-xl border border-slate-200">
-                <div className="flex items-center gap-1 border-b border-slate-100 bg-slate-50 px-2 py-1.5">
-                  <ToolbarButton title="Negrito" onClick={() => applyMarkup("bold")}>
-                    <Bold className="h-4 w-4" />
-                  </ToolbarButton>
-                  <ToolbarButton title="Itálico" onClick={() => applyMarkup("italic")}>
-                    <Italic className="h-4 w-4" />
-                  </ToolbarButton>
-                  <span className="mx-1 h-4 w-px bg-slate-200" />
-                  <ToolbarButton title="Lista com marcadores" onClick={() => applyMarkup("bullet")}>
-                    <List className="h-4 w-4" />
-                  </ToolbarButton>
-                  <ToolbarButton title="Lista numerada" onClick={() => applyMarkup("ordered")}>
-                    <ListOrdered className="h-4 w-4" />
-                  </ToolbarButton>
-                  <span className="ml-auto pr-2 text-[11px] text-slate-400">
-                    Selecione o texto e aplique a formatação
-                  </span>
-                </div>
-                <textarea
-                  data-qkey={q.key}
-                  value={q.pergunta}
-                  onChange={(e) => updateQuestao(q.key, { pergunta: e.target.value })}
-                  rows={3}
-                  placeholder="Digite o enunciado da questão..."
-                  className="w-full resize-y rounded-b-xl border-0 px-4 py-3 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-indigo-200"
-                />
-                {q.pergunta.trim() && (
-                  <div className="border-t border-slate-100 bg-indigo-50/40 px-4 py-3">
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-indigo-400">
-                      Pré-visualização
-                    </p>
-                    <div className="text-sm text-slate-800">{renderPrompt(q.pergunta)}</div>
-                  </div>
-                )}
-              </div>
-
               {/* Alternativas */}
-              {q.tipo === "multiple" && (
-                <div className="mt-4">
+              <div className="mt-4">
                   <p className="mb-2 text-xs font-semibold text-slate-500">
                     Alternativas — marque o círculo da resposta correta
                   </p>
@@ -664,14 +562,6 @@ export default function ExamForm({
                     <Plus className="h-3.5 w-3.5" /> Adicionar alternativa
                   </button>
                 </div>
-              )}
-
-              {q.tipo === "essay" && (
-                <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                  O aluno responderá com texto livre. A correção da dissertativa será feita pelo professor após o envio
-                  (não entra no cálculo automático da nota).
-                </p>
-              )}
             </div>
           ))}
         </div>
@@ -713,28 +603,6 @@ export default function ExamForm({
         </div>
       </div>
     </div>
-  );
-}
-
-function ToolbarButton({
-  children,
-  title,
-  onClick,
-}: {
-  children: React.ReactNode;
-  title: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
-      title={title}
-      className="rounded-md p-1.5 text-slate-600 transition hover:bg-indigo-100 hover:text-indigo-700"
-    >
-      {children}
-    </button>
   );
 }
 

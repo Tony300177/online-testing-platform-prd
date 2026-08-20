@@ -79,6 +79,7 @@ export async function GET(_req: Request, { params }: Ctx) {
       pergunta: q.pergunta,
       tipo: q.tipo,
       valor: Number(q.valor),
+      habilidade: q.habilidade ?? null,
       ordem: q.ordem,
       alternativas: (altByQuestao.get(q.id) ?? []).map((a) => ({
         id: a.id,
@@ -164,6 +165,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
             pergunta: q.pergunta,
             tipo: q.tipo,
             valor: String(q.valor),
+            habilidade: q.habilidade ?? null,
             ordem: i,
           })
           .returning({ id: questoes.id });
@@ -267,6 +269,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
           pergunta: q.pergunta,
           tipo: q.tipo,
           valor: String(q.valor),
+          habilidade: q.habilidade ?? null,
           ordem: i,
         })
         .returning({ id: questoes.id });

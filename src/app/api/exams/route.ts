@@ -54,6 +54,7 @@ export async function POST(req: Request) {
           pergunta: q.pergunta,
           tipo: q.tipo,
           valor: String(q.valor),
+          habilidade: q.habilidade ?? null,
           ordem: i,
         })
         .returning({ id: questoes.id });

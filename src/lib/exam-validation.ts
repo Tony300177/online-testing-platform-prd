@@ -7,8 +7,9 @@ export type AlternativaInput = { letra: string; texto: string; correta: boolean 
 
 export type QuestaoInput = {
   pergunta: string;
-  tipo: "multiple" | "essay";
+  tipo: "multiple";
   valor: number;
+  habilidade: string | null;
   alternativas: AlternativaInput[];
 };
 
@@ -71,17 +72,9 @@ export function parseProvaPayload(body: unknown): { ok: true; value: ProvaInput 
     rawQuestoes.forEach((q, i) => {
       const item = (q ?? {}) as Record<string, unknown>;
       const pergunta = asString(item.pergunta);
-      if (!pergunta) {
-        errors.push(`A questão ${i + 1} está sem enunciado.`);
-        return;
-      }
-      const tipo = asString(item.tipo) === "essay" ? "essay" : "multiple";
+      const tipo = "multiple";
       const valor = asNumber(item.valor, 1);
-
-      if (tipo === "essay") {
-        parsedQuestoes.push({ pergunta, tipo, valor, alternativas: [] });
-        return;
-      }
+      const habilidade = asString(item.habilidade) || null;
 
       const rawAlts = Array.isArray(item.alternativas) ? item.alternativas : [];
       const alternativas: AlternativaInput[] = [];
@@ -104,7 +97,7 @@ export function parseProvaPayload(body: unknown): { ok: true; value: ProvaInput 
         errors.push(`Marque a alternativa correta da questão ${i + 1}.`);
         return;
       }
-      parsedQuestoes.push({ pergunta, tipo, valor, alternativas });
+      parsedQuestoes.push({ pergunta, tipo, valor, habilidade, alternativas });
     });
   }
 

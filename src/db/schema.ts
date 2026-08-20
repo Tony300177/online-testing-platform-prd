@@ -148,8 +148,9 @@ export const questoes = pgTable(
       .references(() => provas.id, { onDelete: "cascade" }),
     numero: integer("numero").notNull().default(0),
     pergunta: text("pergunta").notNull(),
-    tipo: text("tipo").notNull().default("multiple"), // "multiple" | "essay"
+    tipo: text("tipo").notNull().default("multiple"),
     valor: numeric("valor", { precision: 5, scale: 2 }).notNull().default("1"),
+    habilidade: text("habilidade"),
     ordem: integer("ordem").notNull().default(0),
   },
   (t) => [index("questoes_prova_idx").on(t.provaId)]

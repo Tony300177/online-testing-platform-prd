@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getHabilidadesPorDisciplina, CATEGORIA_LABEL, type HabilidadeCategoria } from "@/lib/habilidades";
 
 export type AlternativaDraft = {
   key: string;
@@ -23,8 +24,9 @@ export type AlternativaDraft = {
 export type QuestaoDraft = {
   key: string;
   pergunta: string;
-  tipo: "multiple" | "essay";
+  tipo: "multiple";
   valor: number;
+  habilidade: string;
   alternativas: AlternativaDraft[];
 };
 
@@ -50,6 +52,7 @@ const EMPTY_QUESTION = (): QuestaoDraft => ({
   pergunta: "",
   tipo: "multiple",
   valor: 1,
+  habilidade: "",
   alternativas: [
     { key: KEY(), texto: "", correta: false },
     { key: KEY(), texto: "", correta: false },
@@ -206,9 +209,8 @@ export default function ExamForm({
           pergunta: q.pergunta,
           tipo: q.tipo,
           valor: q.valor,
-          alternativas: q.tipo === "multiple"
-            ? q.alternativas.map((a, i) => ({ letra: String.fromCharCode(65 + i), texto: a.texto, correta: a.correta }))
-            : [],
+          habilidade: q.habilidade || null,
+          alternativas: q.alternativas.map((a, i) => ({ letra: String.fromCharCode(65 + i), texto: a.texto, correta: a.correta })),
         }))
       );
 
@@ -509,6 +511,33 @@ export default function ExamForm({
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
+              </div>
+
+              {/* Seletor de habilidade */}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <label className="text-xs font-semibold text-slate-500">Habilidade:</label>
+                {draft.disciplina ? (
+                  <select
+                    value={q.habilidade}
+                    onChange={(e) => updateQuestao(q.key, { habilidade: e.target.value })}
+                    className="max-w-xs rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400"
+                  >
+                    <option value="">Selecione a habilidade...</option>
+                    {(["vigente", "sensivel", "preditora"] as HabilidadeCategoria[]).map((cat) => {
+                      const habs = getHabilidadesPorDisciplina(draft.disciplina as "LÍNGUA PORTUGUESA" | "MATEMÁTICA").filter((h) => h.categoria === cat);
+                      if (habs.length === 0) return null;
+                      return (
+                        <optgroup key={cat} label={CATEGORIA_LABEL[cat]}>
+                          {habs.map((h) => (
+                            <option key={h.codigo} value={h.codigo}>{h.codigo}</option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                ) : (
+                  <span className="text-xs text-slate-400">Selecione a disciplina primeiro</span>
+                )}
               </div>
 
               {/* Alternativas */}

@@ -47,16 +47,14 @@ export default async function EditExamPage({ params }: { params: Promise<{ id: s
       (q): QuestaoDraft => ({
         key: `q-${q.id}`,
         pergunta: q.pergunta,
-        tipo: q.tipo === "essay" ? "essay" : "multiple",
+        tipo: "multiple",
         valor: Number(q.valor) || 1,
-        alternativas:
-          q.tipo === "essay"
-            ? []
-            : (altByQuestao.get(q.id) ?? []).map((a) => ({
-                key: `a-${a.id}`,
-                texto: a.texto,
-                correta: a.correta,
-              })),
+        habilidade: q.habilidade ?? "",
+        alternativas: (altByQuestao.get(q.id) ?? []).map((a) => ({
+          key: `a-${a.id}`,
+          texto: a.texto,
+          correta: a.correta,
+        })),
       })
     ),
   };

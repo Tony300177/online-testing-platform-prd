@@ -514,46 +514,46 @@ export default function ExamForm({
               </div>
 
               {/* Seletor de habilidade */}
-              <div className="mt-3 rounded-xl border border-slate-200 p-3">
-                <label className="mb-2 block text-xs font-semibold text-slate-500">Habilidade</label>
+              <div className="mt-2 flex flex-wrap items-start gap-2">
+                <label className="mt-1 text-[11px] font-semibold text-slate-500 shrink-0">Habilidades:</label>
                 {draft.disciplina ? (
-                  <div className="space-y-3">
+                  <select
+                    multiple
+                    value={q.habilidade}
+                    onChange={(e) => {
+                      const vals = Array.from(e.target.selectedOptions, (o) => o.value);
+                      updateQuestao(q.key, { habilidade: vals });
+                    }}
+                    className="h-20 flex-1 min-w-[200px] rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] leading-tight text-slate-700 outline-none focus:border-indigo-400"
+                  >
                     {(["vigente", "sensivel", "preditora"] as HabilidadeCategoria[]).map((cat) => {
                       const habs = getHabilidadesPorDisciplina(draft.disciplina as "LÍNGUA PORTUGUESA" | "MATEMÁTICA").filter((h) => h.categoria === cat);
                       if (habs.length === 0) return null;
                       return (
-                        <div key={cat}>
-                          <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">{CATEGORIA_LABEL[cat]}</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {habs.map((h) => (
-                              <button
-                                key={h.codigo}
-                                type="button"
-                                onClick={() => {
-                                  const has = q.habilidade.includes(h.codigo);
-                                  updateQuestao(q.key, {
-                                    habilidade: has
-                                      ? q.habilidade.filter((x) => x !== h.codigo)
-                                      : [...q.habilidade, h.codigo],
-                                  });
-                                }}
-                                className={cn(
-                                  "rounded-lg border px-2.5 py-1 text-xs font-semibold transition",
-                                  q.habilidade.includes(h.codigo)
-                                    ? "border-indigo-500 bg-indigo-100 text-indigo-700"
-                                    : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50"
-                                )}
-                              >
-                                {h.codigo}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                        <optgroup key={cat} label={CATEGORIA_LABEL[cat]}>
+                          {habs.map((h) => (
+                            <option key={h.codigo} value={h.codigo}>{h.codigo}</option>
+                          ))}
+                        </optgroup>
                       );
                     })}
-                  </div>
+                  </select>
                 ) : (
-                  <p className="text-xs text-slate-400">Selecione a disciplina primeiro.</p>
+                  <span className="text-[11px] text-slate-400">Selecione a disciplina primeiro.</span>
+                )}
+                {q.habilidade.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {q.habilidade.map((h) => (
+                      <span key={h} className="inline-flex items-center gap-0.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                        {h}
+                        <button
+                          type="button"
+                          onClick={() => updateQuestao(q.key, { habilidade: q.habilidade.filter((x) => x !== h) })}
+                          className="ml-0.5 text-indigo-400 hover:text-indigo-700"
+                        >×</button>
+                      </span>
+                    ))}
+                  </div>
                 )}
               </div>
 

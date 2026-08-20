@@ -514,29 +514,39 @@ export default function ExamForm({
               </div>
 
               {/* Seletor de habilidade */}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <label className="text-xs font-semibold text-slate-500">Habilidade:</label>
+              <div className="mt-3 rounded-xl border border-slate-200 p-3">
+                <label className="mb-2 block text-xs font-semibold text-slate-500">Habilidade</label>
                 {draft.disciplina ? (
-                  <select
-                    value={q.habilidade}
-                    onChange={(e) => updateQuestao(q.key, { habilidade: e.target.value })}
-                    className="max-w-xs rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400"
-                  >
-                    <option value="">Selecione a habilidade...</option>
+                  <div className="space-y-3">
                     {(["vigente", "sensivel", "preditora"] as HabilidadeCategoria[]).map((cat) => {
                       const habs = getHabilidadesPorDisciplina(draft.disciplina as "LÍNGUA PORTUGUESA" | "MATEMÁTICA").filter((h) => h.categoria === cat);
                       if (habs.length === 0) return null;
                       return (
-                        <optgroup key={cat} label={CATEGORIA_LABEL[cat]}>
-                          {habs.map((h) => (
-                            <option key={h.codigo} value={h.codigo}>{h.codigo}</option>
-                          ))}
-                        </optgroup>
+                        <div key={cat}>
+                          <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">{CATEGORIA_LABEL[cat]}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {habs.map((h) => (
+                              <button
+                                key={h.codigo}
+                                type="button"
+                                onClick={() => updateQuestao(q.key, { habilidade: q.habilidade === h.codigo ? "" : h.codigo })}
+                                className={cn(
+                                  "rounded-lg border px-2.5 py-1 text-xs font-semibold transition",
+                                  q.habilidade === h.codigo
+                                    ? "border-indigo-500 bg-indigo-100 text-indigo-700"
+                                    : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50"
+                                )}
+                              >
+                                {h.codigo}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       );
                     })}
-                  </select>
+                  </div>
                 ) : (
-                  <span className="text-xs text-slate-400">Selecione a disciplina primeiro</span>
+                  <p className="text-xs text-slate-400">Selecione a disciplina primeiro.</p>
                 )}
               </div>
 

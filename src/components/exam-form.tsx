@@ -514,46 +514,60 @@ export default function ExamForm({
               </div>
 
               {/* Seletor de habilidade */}
-              <div className="mt-2 flex flex-wrap items-start gap-2">
-                <label className="mt-1 text-[11px] font-semibold text-slate-500 shrink-0">Habilidades:</label>
+              <div className="mt-2 rounded-lg border border-slate-200 p-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-semibold text-slate-500">
+                    Habilidades
+                    {q.habilidade.length > 0 && (
+                      <span className="ml-1 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
+                        {q.habilidade.length}
+                      </span>
+                    )}
+                  </label>
+                  {q.habilidade.length > 0 && (
+                    <button type="button" onClick={() => updateQuestao(q.key, { habilidade: [] })} className="text-[10px] text-slate-400 hover:text-rose-500">
+                      Limpar
+                    </button>
+                  )}
+                </div>
                 {draft.disciplina ? (
-                  <select
-                    multiple
-                    value={q.habilidade}
-                    onChange={(e) => {
-                      const vals = Array.from(e.target.selectedOptions, (o) => o.value);
-                      updateQuestao(q.key, { habilidade: vals });
-                    }}
-                    className="h-20 flex-1 min-w-[200px] rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] leading-tight text-slate-700 outline-none focus:border-indigo-400"
-                  >
+                  <div className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-3">
                     {(["vigente", "sensivel", "preditora"] as HabilidadeCategoria[]).map((cat) => {
                       const habs = getHabilidadesPorDisciplina(draft.disciplina as "LÍNGUA PORTUGUESA" | "MATEMÁTICA").filter((h) => h.categoria === cat);
                       if (habs.length === 0) return null;
+                      const catSelected = habs.filter((h) => q.habilidade.includes(h.codigo)).length;
                       return (
-                        <optgroup key={cat} label={CATEGORIA_LABEL[cat]}>
-                          {habs.map((h) => (
-                            <option key={h.codigo} value={h.codigo}>{h.codigo}</option>
-                          ))}
-                        </optgroup>
+                        <div key={cat} className="rounded-lg bg-slate-50 p-2">
+                          <p className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                            <span>{CATEGORIA_LABEL[cat]}</span>
+                            {catSelected > 0 && <span className="text-indigo-500">{catSelected}/{habs.length}</span>}
+                          </p>
+                          <div className="max-h-28 space-y-0.5 overflow-y-auto">
+                            {habs.map((h) => (
+                              <label key={h.codigo} className="flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-[11px] hover:bg-slate-100">
+                                <input
+                                  type="checkbox"
+                                  checked={q.habilidade.includes(h.codigo)}
+                                  onChange={() => {
+                                    const has = q.habilidade.includes(h.codigo);
+                                    updateQuestao(q.key, {
+                                      habilidade: has
+                                        ? q.habilidade.filter((x) => x !== h.codigo)
+                                        : [...q.habilidade, h.codigo],
+                                    });
+                                  }}
+                                  className="h-3 w-3 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <span className="font-medium text-slate-600">{h.codigo}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
                       );
                     })}
-                  </select>
-                ) : (
-                  <span className="text-[11px] text-slate-400">Selecione a disciplina primeiro.</span>
-                )}
-                {q.habilidade.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {q.habilidade.map((h) => (
-                      <span key={h} className="inline-flex items-center gap-0.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
-                        {h}
-                        <button
-                          type="button"
-                          onClick={() => updateQuestao(q.key, { habilidade: q.habilidade.filter((x) => x !== h) })}
-                          className="ml-0.5 text-indigo-400 hover:text-indigo-700"
-                        >×</button>
-                      </span>
-                    ))}
                   </div>
+                ) : (
+                  <p className="mt-1 text-[11px] text-slate-400">Selecione a disciplina primeiro.</p>
                 )}
               </div>
 

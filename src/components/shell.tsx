@@ -1,0 +1,121 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  BarChart3,
+  Building2,
+  ClipboardList,
+  FilePlus2,
+  LayoutDashboard,
+  ListChecks,
+  LogOut,
+  PieChart,
+  School,
+  UploadCloud,
+  Users,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import Logo from "@/components/logo";
+
+type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
+
+const NAV: NavItem[] = [
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/dashboard", label: "Turma/Escola", icon: School },
+  { href: "/professor", label: "Provas", icon: ClipboardList },
+  { href: "/professor/nova", label: "Nova prova", icon: FilePlus2 },
+  { href: "/professor/cadastro", label: "Cadastro", icon: Building2 },
+  { href: "/admin/importar", label: "Importar", icon: UploadCloud },
+  { href: "/admin/estatisticas", label: "Estatísticas", icon: PieChart },
+  { href: "/admin/alunos", label: "Alunos", icon: Users },
+  { href: "/admin/respostas", label: "Respostas", icon: ListChecks },
+];
+
+export default function Shell({
+  user,
+  children,
+}: {
+  user: { name: string; role: string };
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const home = "/admin";
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/");
+    router.refresh();
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+          <Link href={home} className="flex items-center">
+            <Logo className="h-14 w-auto" />
+          </Link>
+
+          <nav className="order-3 flex w-full items-center gap-1 overflow-x-auto sm:order-none sm:w-auto sm:flex-1">
+            {NAV.map((item) => {
+              const active =
+                item.href === "/professor" || item.href === "/admin"
+                  ? pathname === item.href
+                  : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition",
+                    active
+                      ? "bg-indigo-50 text-indigo-700"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="ml-auto flex items-center gap-3">
+            <div className="hidden items-center gap-2 sm:flex">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700">
+                {user.name.charAt(0).toUpperCase()}
+              </span>
+              <div className="leading-tight">
+                <p className="text-sm font-semibold text-slate-800">{user.name}</p>
+                <p className="text-[11px] text-slate-400">Professor & Administrador</p>
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              title="Sair"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sair</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8">{children}</main>
+
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-2 px-4 py-5 sm:flex-row">
+          <p className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <BarChart3 className="h-4 w-4 text-indigo-600" />
+            SabeTudo — plataforma de provas online
+          </p>
+          <p className="text-sm font-medium text-slate-600">
+            Desenvolvido pelo Departamento de Tecnologia/SME.
+          </p>
+        </div>
+      </footer>
+    </div>
+  );
+}

@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+::selection {
+  background-color: #c7d2fe;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar discreta */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+/* Remove setas de inputs number e calendários nativos estilizados */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

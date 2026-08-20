@@ -158,7 +158,8 @@ export async function fetchEstatisticas(f: AlunoFilters = {}): Promise<Estatisti
     byField(alunos.bairro),
     db
       .select({ label: turmas.nome, value: count() })
-      .from(matriculas)
+      .from(alunos)
+      .innerJoin(matriculas, eq(matriculas.alunoId, alunos.id))
       .innerJoin(turmas, eq(matriculas.turmaId, turmas.id))
       .innerJoin(escolas, eq(turmas.escolaId, escolas.id))
       .leftJoin(professores, eq(turmas.professorId, professores.id))
@@ -167,7 +168,8 @@ export async function fetchEstatisticas(f: AlunoFilters = {}): Promise<Estatisti
       .orderBy(descCount()),
     db
       .select({ label: professores.nome, value: count() })
-      .from(matriculas)
+      .from(alunos)
+      .innerJoin(matriculas, eq(matriculas.alunoId, alunos.id))
       .innerJoin(turmas, eq(matriculas.turmaId, turmas.id))
       .innerJoin(escolas, eq(turmas.escolaId, escolas.id))
       .innerJoin(professores, eq(turmas.professorId, professores.id))

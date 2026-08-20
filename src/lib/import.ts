@@ -302,7 +302,7 @@ async function loadSnapshot(anoLetivo: number): Promise<DbSnapshot> {
  * Parse + validação de uma planilha
  * ============================================================ */
 
-export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number): ParsedRow[] {
+export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number, escolaDefault?: string): ParsedRow[] {
   const headers = rows.length > 0 ? Object.keys(rows[0] ?? {}) : [];
   const headerMap = mapHeaders(headers);
 
@@ -316,7 +316,7 @@ export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number): P
     const motivos: string[] = [];
     const avisos: string[] = [];
 
-    const escola = get("ESCOLA", row).toUpperCase();
+    const escola = get("ESCOLA", row).toUpperCase() || (escolaDefault ? escolaDefault.toUpperCase() : "");
     const escolaCodigo = toInt(row[headerMap.get("ESCOLA_CODIGO") ?? ""]);
     const turmaRaw = get("TURMA", row).toUpperCase();
     const turmaAnoRaw = get("TURMA_ANO", row);
@@ -377,8 +377,8 @@ export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number): P
 }
 
 /** Valida contra o estado atual do banco e monta o relatório (sem gravar). */
-export async function validateImport(rows: ImportLine[], anoLetivoDefault = DEFAULT_ANO_LETIVO): Promise<ImportReport> {
-  const items = parseImportRows(rows, anoLetivoDefault);
+export async function validateImport(rows: ImportLine[], anoLetivoDefault = DEFAULT_ANO_LETIVO, escolaDefault?: string): Promise<ImportReport> {
+  const items = parseImportRows(rows, anoLetivoDefault, escolaDefault);
   const snap = await loadSnapshot(anoLetivoDefault);
 
   const itens: ReportItem[] = [];
@@ -448,8 +448,8 @@ export async function validateImport(rows: ImportLine[], anoLetivoDefault = DEFA
 }
 
 /** Valida e grava de forma idempotente. */
-export async function commitImport(rows: ImportLine[], anoLetivoDefault = DEFAULT_ANO_LETIVO): Promise<ImportReport> {
-  const items = parseImportRows(rows, anoLetivoDefault);
+export async function commitImport(rows: ImportLine[], anoLetivoDefault = DEFAULT_ANO_LETIVO, escolaDefault?: string): Promise<ImportReport> {
+  const items = parseImportRows(rows, anoLetivoDefault, escolaDefault);
   const snap = await loadSnapshot(anoLetivoDefault);
 
   const itens: ReportItem[] = [];

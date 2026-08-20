@@ -54,7 +54,7 @@ type ImportReport = {
   };
 };
 
-type FileState = { name: string; size: number; rows: Record<string, string | number | null | undefined>[] };
+type FileState = { name: string; size: number; rows: Record<string, string | number | null | undefined>[]; escola: string };
 
 const TEMPLATE_HEADERS = [
   "ESCOLA",
@@ -155,6 +155,20 @@ export default function ImportPanel() {
       const headers = raw[headerIdx].map((h: unknown) => String(h || "").trim());
       const dataRows = raw.slice(headerIdx + 1).filter((row: unknown[]) => row.some((c: unknown) => c !== "" && c !== null));
 
+      // Extrai nome da escola das linhas de título (antes do cabeçalho)
+      let escolaDetectada = "";
+      for (let r = 0; r < headerIdx; r++) {
+        const cells = raw[r];
+        if (!cells) continue;
+        for (const c of cells) {
+          if (typeof c === "string" && c.trim().length >= 3 && !/^\d+$/.test(c.trim())) {
+            escolaDetectada = c.trim().toUpperCase();
+            break;
+          }
+        }
+        if (escolaDetectada) break;
+      }
+
       const rows: Record<string, string | number | null | undefined>[] = dataRows.map((row: unknown[]) => {
         const obj: Record<string, string | number | null | undefined> = {};
         headers.forEach((h: string, i: number) => {
@@ -164,7 +178,7 @@ export default function ImportPanel() {
       });
 
       if (rows.length === 0) throw new Error("Nenhuma linha de dados encontrada após o cabeçalho.");
-      setFile({ name: f.name, size: f.size, rows });
+      setFile({ name: f.name, size: f.size, rows, escola: escolaDetectada });
     } catch (e) {
       setFile(null);
       setError(e instanceof Error ? e.message : "Não foi possível ler o arquivo.");
@@ -179,7 +193,7 @@ export default function ImportPanel() {
       const res = await fetch("/api/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: file.rows }),
+        body: JSON.stringify({ rows: file.rows, escola: file.escola }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -203,7 +217,7 @@ export default function ImportPanel() {
       const res = await fetch("/api/import/commit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: file.rows }),
+        body: JSON.stringify({ rows: file.rows, escola: file.escola }),
       });
       const data = await res.json();
       if (!res.ok) {

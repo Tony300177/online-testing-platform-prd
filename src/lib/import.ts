@@ -40,8 +40,8 @@ const TURNO_SINONIMOS: Record<string, string> = {
   integral: "Integral",
 };
 
-const SEXO_MASCULINO = new Set(["m", "masc", "masculino", "homem", "h", "1"]);
-const SEXO_FEMININO = new Set(["f", "fem", "feminino", "mulher", "2"]);
+const SEXO_MASCULINO = new Set(["m", "masc", "masc.", "masculino", "homem", "h", "1"]);
+const SEXO_FEMININO = new Set(["f", "fem", "fem.", "feminino", "mulher", "2"]);
 
 /** Cabeçalhos aceitos por campo (comparação normalizada: sem acento, sem º/ª, maiúsculas). */
 const HEADER_ALIASES: Record<string, string[]> = {
@@ -53,13 +53,13 @@ const HEADER_ALIASES: Record<string, string[]> = {
   ANO_LETIVO: ["ANO_LETIVO", "ANO LETIVO", "ANO LETIVO (MATRICULA)"],
   PROFESSOR: ["PROFESSOR", "NOME DO PROFESSOR", "PROFESSOR (NOME)"],
   PROFESSOR_CODIGO: ["PROFESSOR_CODIGO", "CODIGO DO PROFESSOR", "CODIGO PROFESSOR", "FUNCIONAL"],
-  ALUNO: ["ALUNO", "NOME DO ALUNO", "ALUNO (NOME)", "NOME ALUNO"],
-  NUMERO_CHAMADA: ["NUMERO_CHAMADA", "N CHAMADA", "N CHAMADA", "CHAMADA", "NUMERO DE CHAMADA", "N DA CHAMADA"],
+  ALUNO: ["ALUNO", "ALUNOS", "NOME DO ALUNO", "ALUNO (NOME)", "NOME ALUNO"],
+  NUMERO_CHAMADA: ["NUMERO_CHAMADA", "N CHAMADA", "N CHAMADA", "CHAMADA", "NUMERO DE CHAMADA", "N DA CHAMADA", "NO CHAMADA"],
   MATRICULA: ["MATRICULA", "N MATRICULA", "NUMERO DE MATRICULA", "N DA MATRICULA"],
-  SEXO: ["SEXO", "GENERO", "SEXO/GENERO"],
-  COR_RACA: ["COR_RACA", "COR/RACA", "COR", "RACA", "COR RACA", "COR OU RACA", "ETNIA"],
-  BAIRRO: ["BAIRRO", "BAIRRO DE RESIDENCIA", "RESIDENCIA"],
-  DATA_NASCIMENTO: ["DATA_NASCIMENTO", "DATA DE NASCIMENTO", "NASCIMENTO", "DATA NASCIMENTO"],
+  SEXO: ["SEXO", "GENERO", "GÊNERO", "SEXO/GENERO"],
+  COR_RACA: ["COR_RACA", "COR/RACA", "COR", "RACA", "COR RACA", "COR OU RACA", "ETNIA", "COR RAÇA"],
+  BAIRRO: ["BAIRRO", "BAIRRO DE RESIDENCIA", "BAIRRO DE RESIDÊNCIA", "RESIDENCIA", "RESIDÊNCIA"],
+  DATA_NASCIMENTO: ["DATA_NASCIMENTO", "DATA DE NASCIMENTO", "NASCIMENTO", "DATA NASCIMENTO", "DATA DE NASC."],
 };
 
 export const CANONICAL_FIELDS = [
@@ -106,10 +106,43 @@ export function mapHeaders(headers: string[]): Map<ImportField, string> {
   return map;
 }
 
+/* ============================================================
+ * Auto-detecção de linha de cabeçalho (planilhas com título)
+ * ============================================================ */
+
+const KNOWN_HEADERS = new Set(
+  Object.values(HEADER_ALIASES)
+    .flat()
+    .map((a) => normalizeHeader(a))
+);
+
+/** Deteta a linha de cabeçalho em planilhas que têm linhas de título antes do header real. */
+export function detectHeaderRowIndex(rows: unknown[][]): number {
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const cells = rows[i];
+    if (!cells || cells.length === 0) continue;
+    const hits = cells.filter(
+      (c) => typeof c === "string" && c.trim() !== "" && KNOWN_HEADERS.has(normalizeHeader(String(c)))
+    ).length;
+    if (hits >= 3) return i;
+  }
+  return 0;
+}
+
+/** Extrai o nome limpo do professor no formato "168 - NOME" (remove prefixo numérico). */
+export function stripPrefix(value: string, separator = " - "): string {
+  const idx = value.indexOf(separator);
+  if (idx === -1) return value;
+  const after = value.substring(idx + separator.length).trim();
+  return after.length >= 2 ? after : value;
+}
+
 function normalizeTurno(value: string): string | null {
   const v = normalize(value);
   if (!v) return null;
-  return TURNO_SINONIMOS[v] ?? null;
+  // suporta "1 - MATUTINO" → "Matutino"
+  const stripped = normalize(stripPrefix(value, " - "));
+  return TURNO_SINONIMOS[stripped] ?? TURNO_SINONIMOS[v] ?? null;
 }
 
 function normalizeSexo(value: string): "Masculino" | "Feminino" | null {
@@ -124,11 +157,29 @@ function normalizeEtnia(value: string): Etnia | null {
   const v = normalize(value);
   if (!v) return null;
   const found = ETNIAS.find((e) => normalize(e) === v);
-  return found ?? null;
+  if (found) return found;
+  // "NÃO DECLARADA" → armazena como string (estatísticas mostram como grupo próprio)
+  if (v.includes("nao declarada") || v.includes("não declarada")) return "Não Declarada" as Etnia;
+  return null;
 }
 
-function parseDataNascimento(value: string): Date | null {
-  const v = value.trim();
+/** Converte data Excel serial number (ex.: 41803) para Date. */
+function excelSerialToDate(serial: number): Date | null {
+  if (!Number.isFinite(serial) || serial < 1) return null;
+  const utcDays = Math.floor(serial - 25569);
+  const utcMs = utcDays * 86400000;
+  const d = new Date(utcMs);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function parseDataNascimento(value: string | number): Date | null {
+  if (value === null || value === undefined || value === "") return null;
+  // Excel serial number (ex.: 41803)
+  if (typeof value === "number" || (typeof value === "string" && /^\d{4,5}$/.test(value.trim()))) {
+    const n = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(n) && n > 30000 && n < 60000) return excelSerialToDate(n);
+  }
+  const v = String(value).trim();
   if (!v) return null;
   // DD/MM/AAAA
   const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v);
@@ -267,12 +318,13 @@ export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number): P
 
     const escola = get("ESCOLA", row).toUpperCase();
     const escolaCodigo = toInt(row[headerMap.get("ESCOLA_CODIGO") ?? ""]);
-    const turma = get("TURMA", row).toUpperCase();
-    const turmaAno = get("TURMA_ANO", row);
+    const turmaRaw = get("TURMA", row).toUpperCase();
+    const turmaAnoRaw = get("TURMA_ANO", row);
     const turno = normalizeTurno(get("TURNO", row));
     const anoLetivoRaw = toInt(row[headerMap.get("ANO_LETIVO") ?? ""]) ?? anoLetivoDefault;
-    const professor = get("PROFESSOR", row).toUpperCase();
-    const professorCodigo = toInt(row[headerMap.get("PROFESSOR_CODIGO") ?? ""]);
+    const professorRaw = get("PROFESSOR", row);
+    const professor = stripPrefix(professorRaw).toUpperCase();
+    const professorCodigo = toInt(row[headerMap.get("PROFESSOR_CODIGO") ?? ""]) ?? toInt(professorRaw.split(/\s*-\s*/)[0]);
     const aluno = get("ALUNO", row).toUpperCase();
     const numeroChamada = toInt(row[headerMap.get("NUMERO_CHAMADA") ?? ""]);
     const matricula = get("MATRICULA", row) || null;
@@ -280,6 +332,11 @@ export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number): P
     const etnia = normalizeEtnia(get("COR_RACA", row));
     const bairro = get("BAIRRO", row) || null;
     const dataNascimento = parseDataNascimento(get("DATA_NASCIMENTO", row));
+
+    // Turma: "5ºA" → turmaAno="5", turma="5ºA"
+    const turmaMatch = turmaRaw.match(/^(\d+)\s*[ºo°]?\s*(.*)$/i);
+    const turmaAno = turmaAnoRaw || (turmaMatch ? turmaMatch[1] + "º Ano" : turmaAnoRaw);
+    const turma = turmaMatch && !turmaRaw.includes("/") ? turmaRaw : turmaRaw;
 
     if (escola.length < 3) motivos.push("ESCOLA ausente ou muito curta");
     if (turma.length < 2) motivos.push("TURMA ausente ou muito curta");

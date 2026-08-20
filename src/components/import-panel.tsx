@@ -15,6 +15,19 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Conjunto de cabeçalhos conhecidos para auto-detecção (normalizados: uppercase, sem acento, sem ºª)
+const KNOWN_HEADER_SET = new Set([
+  "ESCOLA", "TURMA", "TURNO", "ANO LETIVO", "PROFESSOR", "ALUNO", "ALUNOS",
+  "SEXO", "GENERO", "COR/RACA", "COR", "RACA", "ETNIA", "BAIRRO",
+  "MATRICULA", "CHAMADA", "N CHAMADA", "NASCIMENTO", "DATA NASCIMENTO",
+  "ESCOLA CODIGO", "TURMA ANO", "ANO", "SERIE", "PROFESSOR CODIGO", "CODIGO PROFESSOR",
+  "PERIODO", "DATA DE NASCIMENTO", "COR RACA", "DATA DE NASC.",
+  "NOME DA ESCOLA", "NOME DO ALUNO", "NOME DO PROFESSOR", "BAIRRO DE RESIDENCIA",
+  "RESIDENCIA", "NUMERO DE CHAMADA",
+  "N MATRICULA", "NUMERO DE MATRICULA", "TIPO DE NE", "NE - NECESSIDADES ESPECIAIS",
+  "N", "NO",
+]);
+
 type ImportReport = {
   ok: boolean;
   total: number;
@@ -121,10 +134,36 @@ export default function ImportPanel() {
       const wb = XLSX.read(buffer, { type: "array" });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       if (!sheet) throw new Error("Planilha vazia ou sem abas.");
-      const rows = XLSX.utils.sheet_to_json<Record<string, string | number | null | undefined>>(sheet, {
-        defval: "",
+
+      // Lê todas as linhas como arrays para detectar onde está o cabeçalho
+      const raw: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+      if (raw.length < 2) throw new Error("Nenhuma linha de dados encontrada.");
+
+      // Detecta a linha do cabeçalho (pula linhas de título)
+      const headerIdx = raw.findIndex((row) => {
+        const recognized = row.filter((c: unknown) => {
+          if (typeof c !== "string" || !c.trim()) return false;
+          const norm = c.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[ºª]/g, "").replace(/\s+/g, " ").trim();
+          return norm.length >= 2 && KNOWN_HEADER_SET.has(norm);
+        }).length;
+        return recognized >= 3;
       });
-      if (rows.length === 0) throw new Error("Nenhuma linha de dados encontrada (linha 1 deve ser o cabeçalho).");
+
+      if (headerIdx < 0) throw new Error("Não foi possível identificar as colunas na planilha. Verifique se os cabeçalhos estão na segunda linha.");
+
+      // Reconstrói a partir da linha de cabeçalho
+      const headers = raw[headerIdx].map((h: unknown) => String(h || "").trim());
+      const dataRows = raw.slice(headerIdx + 1).filter((row: unknown[]) => row.some((c: unknown) => c !== "" && c !== null));
+
+      const rows: Record<string, string | number | null | undefined>[] = dataRows.map((row: unknown[]) => {
+        const obj: Record<string, string | number | null | undefined> = {};
+        headers.forEach((h: string, i: number) => {
+          obj[h] = row[i] !== undefined ? (row[i] as string | number | null) : "";
+        });
+        return obj;
+      });
+
+      if (rows.length === 0) throw new Error("Nenhuma linha de dados encontrada após o cabeçalho.");
       setFile({ name: f.name, size: f.size, rows });
     } catch (e) {
       setFile(null);

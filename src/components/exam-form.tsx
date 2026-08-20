@@ -514,53 +514,56 @@ export default function ExamForm({
               {/* Alternativas */}
               <div className="mt-4">
                   <p className="mb-2 text-xs font-semibold text-slate-500">
-                    Alternativas — marque o círculo da resposta correta
+                    Alternativas — marque a resposta correta
                   </p>
-                  <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
                     {q.alternativas.map((a, oi) => (
-                      <div key={a.key} className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => markCorreta(q.key, a.key)}
-                          title="Marcar como correta"
-                          className={cn(
-                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 transition",
-                            a.correta
-                              ? "border-emerald-500 bg-emerald-100 text-emerald-700"
-                              : "border-slate-300 text-transparent hover:border-emerald-300"
-                          )}
+                      <button
+                        key={a.key}
+                        type="button"
+                        onClick={() => markCorreta(q.key, a.key)}
+                        title={`Alternativa ${String.fromCharCode(65 + oi)} — clique para marcar como correta`}
+                        className={cn(
+                          "inline-flex items-center gap-2 rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition",
+                          a.correta
+                            ? "border-emerald-500 bg-emerald-100 text-emerald-700"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50"
+                        )}
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold"
+                          style={{
+                            borderColor: a.correta ? "#10b981" : "#cbd5e1",
+                            backgroundColor: a.correta ? "#d1fae5" : "transparent",
+                          }}
                         >
-                          <span className="text-sm font-bold">✓</span>
-                        </button>
-                        <span className="w-6 shrink-0 text-center text-sm font-bold text-slate-400">
-                          {String.fromCharCode(65 + oi)}
+                          {a.correta ? "✓" : String.fromCharCode(65 + oi)}
                         </span>
-                        <input
-                          value={a.texto}
-                          onChange={(e) => setAlternativa(q.key, a.key, { texto: e.target.value })}
-                          placeholder={`Texto da alternativa ${String.fromCharCode(65 + oi)}`}
-                          className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeAlternativa(q.key, a.key)}
-                          disabled={q.alternativas.length <= 2}
-                          title="Remover alternativa"
-                          className="rounded-lg border border-slate-200 p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-500 disabled:opacity-30"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
+                        <span className="max-w-[160px] truncate">{a.texto || String.fromCharCode(65 + oi)}</span>
+                      </button>
                     ))}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => addAlternativa(q.key)}
-                    disabled={q.alternativas.length >= 8}
-                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-indigo-300 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50 disabled:opacity-40"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Adicionar alternativa
-                  </button>
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => addAlternativa(q.key)}
+                      disabled={q.alternativas.length >= 8}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-indigo-300 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50 disabled:opacity-40"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Adicionar alternativa
+                    </button>
+                    {q.alternativas.some((a) => a.correta) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const firstFalse = q.alternativas.find((a) => !a.correta);
+                          if (firstFalse) markCorreta(q.key, firstFalse.key);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-50"
+                      >
+                        Desmarcar correta
+                      </button>
+                    )}
+                  </div>
                 </div>
             </div>
           ))}

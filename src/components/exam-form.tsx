@@ -579,21 +579,33 @@ export default function ExamForm({
                   <p className="mb-1 text-[10px] font-semibold text-slate-500">
                     Gabarito
                   </p>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5" role="radiogroup" aria-label="Gabarito da questão">
                     {q.alternativas.map((a, oi) => (
                       <button
                         key={a.key}
                         type="button"
+                        role="radio"
+                        aria-checked={a.correta}
+                        aria-label={`Alternativa ${String.fromCharCode(65 + oi)}${a.correta ? ", selecionada" : ""}`}
                         onClick={() => markCorreta(q.key, a.key)}
-                        title={a.correta ? "Correta ✓" : `Marcar ${String.fromCharCode(65 + oi)} como correta`}
                         className={cn(
-                          "flex h-6 w-6 items-center justify-center rounded-full border-2 text-[10px] font-bold transition",
+                          "relative flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] font-semibold transition-all duration-150 ease-out",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1",
+                          "active:scale-[0.95] hover:scale-[1.02]",
                           a.correta
-                            ? "border-emerald-500 bg-emerald-100 text-emerald-700"
-                            : "border-slate-300 bg-white text-slate-600 hover:border-indigo-400 hover:bg-indigo-50"
+                            ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm"
+                            : "border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50/50"
                         )}
                       >
-                        {a.correta ? "✓" : String.fromCharCode(65 + oi)}
+                        <span className="transition-transform duration-150">{String.fromCharCode(65 + oi)}</span>
+                        {a.correta && (
+                          <span
+                            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                            aria-hidden="true"
+                          >
+                            <span className="h-2.5 w-2.5 rounded-full bg-indigo-600 scale-100 transition-transform duration-150 ease-out" />
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>

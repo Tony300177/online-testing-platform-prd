@@ -46,7 +46,6 @@ export default async function EditExamPage({ params }: { params: Promise<{ id: s
     questoes: qs.map(
       (q): QuestaoDraft => ({
         key: `q-${q.id}`,
-        pergunta: q.pergunta,
         tipo: "multiple",
         valor: Number(q.valor) || 1,
         habilidade: Array.isArray(q.habilidade) ? q.habilidade : q.habilidade ? [q.habilidade] : [],

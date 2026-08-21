@@ -24,7 +24,6 @@ export type AlternativaDraft = {
 
 export type QuestaoDraft = {
   key: string;
-  pergunta: string;
   tipo: "multiple";
   valor: number;
   habilidade: string[];
@@ -50,7 +49,6 @@ const KEY = () => Math.random().toString(36).slice(2);
 
 const EMPTY_QUESTION = (): QuestaoDraft => ({
   key: KEY(),
-  pergunta: "",
   tipo: "multiple",
   valor: 1,
   habilidade: [],
@@ -210,7 +208,6 @@ export default function ExamForm({
     try {
       const questoesJson = JSON.stringify(
         draft.questoes.map((q) => ({
-          pergunta: q.pergunta,
           tipo: q.tipo,
           valor: q.valor,
           habilidade: q.habilidade.length > 0 ? q.habilidade : null,

@@ -57,7 +57,6 @@ const EMPTY_QUESTION = (): QuestaoDraft => ({
     { key: KEY(), texto: "B", correta: false },
     { key: KEY(), texto: "C", correta: false },
     { key: KEY(), texto: "D", correta: false },
-    { key: KEY(), texto: "E", correta: false },
   ],
 });
 
@@ -588,10 +587,10 @@ export default function ExamForm({
                         onClick={() => markCorreta(q.key, a.key)}
                         title={a.correta ? "Correta ✓" : `Marcar ${String.fromCharCode(65 + oi)} como correta`}
                         className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-xl border-2 text-sm font-bold transition",
+                          "flex h-12 w-12 items-center justify-center rounded-full border-2 text-base font-bold transition",
                           a.correta
                             ? "border-emerald-500 bg-emerald-100 text-emerald-700 shadow-sm"
-                            : "border-slate-200 bg-white text-slate-500 hover:border-indigo-300 hover:bg-indigo-50"
+                            : "border-slate-300 bg-white text-slate-600 hover:border-indigo-400 hover:bg-indigo-50"
                         )}
                       >
                         {a.correta ? "✓" : String.fromCharCode(65 + oi)}

@@ -864,8 +864,8 @@ export default function ExamPlayer({ code }: { code: string }) {
               </button>
             </div>
 
-            {/* PDF 60% + Gabarito 40% */}
-            <div className="grid items-start gap-6 lg:grid-cols-[1.5fr_1fr]">
+            {/* PDF 70% + Gabarito 30% */}
+            <div className="grid items-start gap-6 lg:grid-cols-[2.33fr_1fr]">
               <div className={cn("lg:block", mobileTab !== "pdf" && "hidden")}>
                 <div className="lg:sticky lg:top-24">
                   <PdfViewer url={`/api/prova/${encodeURIComponent(code)}/pdf`} title={exam?.arquivoNome ?? undefined} />
@@ -1326,7 +1326,7 @@ function AnswerPanel({
 
                 {q.tipo === "multiple" ? (
                   <div className="mt-3" role="radiogroup" aria-label={`Alternativas da questão ${q.numero}`}>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {q.alternativas.map((alt) => {
                         const selected = a?.alternativaId === alt.id;
                         return (
@@ -1338,7 +1338,7 @@ function AnswerPanel({
                             aria-label={`Alternativa ${alt.letra}${selected ? ", selecionada" : ""}`}
                             onClick={() => onAnswer(q, { alternativaId: alt.id })}
                             className={cn(
-                              "relative flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold transition-all duration-150 ease-out",
+                              "relative flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] font-semibold transition-all duration-150 ease-out",
                               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1",
                               "active:scale-[0.95] hover:scale-[1.02]",
                               selected
@@ -1352,14 +1352,14 @@ function AnswerPanel({
                                 className="absolute inset-0 flex items-center justify-center pointer-events-none"
                                 aria-hidden="true"
                               >
-                                <span className="h-2.5 w-2.5 rounded-full bg-indigo-600 scale-100 transition-transform duration-150 ease-out" />
+                                <span className="h-2 w-2 rounded-full bg-indigo-600 scale-100 transition-transform duration-150 ease-out" />
                               </span>
                             )}
                           </button>
                         );
                       })}
                     </div>
-                    <p className="mt-2 text-[11px] text-slate-500">Clique na letra para responder</p>
+                    <p className="mt-1.5 text-[10px] text-slate-500">Clique na letra para responder</p>
                   </div>
                 ) : (
                   <textarea

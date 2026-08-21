@@ -1060,48 +1060,57 @@ function GabaritoPanel({
               className={cn("rounded-xl border p-2.5 transition", isFlagged ? "border-amber-200 bg-amber-50/50" : "border-slate-200")}
             >
               <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => onNavigate(qi)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-slate-700 transition hover:text-indigo-600"
-                >
-                  Questão {q.numero}
-                  {isFlagged && <Flag className="h-3 w-3 fill-amber-500 text-amber-500" />}
-                </button>
-                {q.tipo === "essay" ? (
+                {q.tipo === "multiple" ? (
+                  <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label={`Alternativas da questão ${q.numero}`}>
+                    <button
+                      type="button"
+                      onClick={() => onNavigate(qi)}
+                      title={`Ir para a questão ${q.numero}`}
+                      className="mr-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-xs font-bold text-white transition hover:bg-indigo-700"
+                    >
+                      {q.numero}
+                    </button>
+                    {isFlagged && <Flag className="h-3 w-3 fill-amber-500 text-amber-500" />}
+                    {q.alternativas.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected === a.id}
+                        aria-label={`Alternativa ${a.letra}${selected === a.id ? ", selecionada" : ""}`}
+                        onClick={() => onMark(q, a.id)}
+                        title={`Marcar alternativa ${a.letra}`}
+                        className={cn(
+                          "flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold transition",
+                          selected === a.id
+                            ? "bg-indigo-600 text-white"
+                            : "bg-slate-100 text-slate-600 hover:bg-indigo-100 hover:text-indigo-700"
+                        )}
+                      >
+                        {a.letra}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onNavigate(qi)}
+                    className="flex items-center gap-1.5 text-xs font-bold text-slate-700 transition hover:text-indigo-600"
+                  >
+                    Questão {q.numero}
+                    {isFlagged && <Flag className="h-3 w-3 fill-amber-500 text-amber-500" />}
+                  </button>
+                )}
+                {isFlagged ? null : q.tipo === "essay" ? (
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
                     Dissertativa
                   </span>
-                ) : selectedAlt ? (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white">
-                    {selectedAlt.letra}
-                  </span>
-                ) : (
+                ) : !selectedAlt ? (
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
                     Em branco
                   </span>
-                )}
+                ) : null}
               </div>
-              {q.tipo === "multiple" && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {q.alternativas.map((a) => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => onMark(q, a.id)}
-                      title={`Marcar alternativa ${a.letra}`}
-                      className={cn(
-                        "flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold transition",
-                        selected === a.id
-                          ? "bg-indigo-600 text-white"
-                          : "bg-slate-100 text-slate-600 hover:bg-indigo-100 hover:text-indigo-700"
-                      )}
-                    >
-                      {a.letra}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           );
         })}
@@ -1303,12 +1312,56 @@ function AnswerPanel({
                 className={cn("px-4 py-4", isFlagged && "bg-amber-50/50")}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-bold text-slate-800">
-                    <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600 text-[11px] font-bold text-white">
-                      {q.numero}
-                    </span>
-                    {renderPrompt(q.pergunta)}
-                  </p>
+                  {q.tipo === "multiple" ? (
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label={`Alternativas da questão ${q.numero}`}>
+                        <span className="mr-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-600 text-xs font-bold text-white">
+                          {q.numero}
+                        </span>
+                        {q.alternativas.map((alt) => {
+                          const selected = a?.alternativaId === alt.id;
+                          return (
+                            <button
+                              key={alt.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              aria-label={`Alternativa ${alt.letra}${selected ? ", selecionada" : ""}`}
+                              onClick={() => onAnswer(q, { alternativaId: alt.id })}
+                              className={cn(
+                                "relative flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] font-semibold transition-all duration-150 ease-out",
+                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1",
+                                "active:scale-[0.95] hover:scale-[1.02]",
+                                selected
+                                  ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm"
+                                  : "border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50/50"
+                              )}
+                            >
+                              <span className="transition-transform duration-150">{alt.letra}</span>
+                              {selected && (
+                                <span
+                                  className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                                  aria-hidden="true"
+                                >
+                                  <span className="h-2 w-2 rounded-full bg-indigo-600 scale-100 transition-transform duration-150 ease-out" />
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="mt-1.5 text-xs font-semibold leading-relaxed text-slate-700">
+                        {renderPrompt(q.pergunta)}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm font-bold text-slate-800">
+                      <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600 text-[11px] font-bold text-white">
+                        {q.numero}
+                      </span>
+                      {renderPrompt(q.pergunta)}
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={() => onToggleFlag(q.id)}
@@ -1324,44 +1377,7 @@ function AnswerPanel({
                   </button>
                 </div>
 
-                {q.tipo === "multiple" ? (
-                  <div className="mt-3" role="radiogroup" aria-label={`Alternativas da questão ${q.numero}`}>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {q.alternativas.map((alt) => {
-                        const selected = a?.alternativaId === alt.id;
-                        return (
-                          <button
-                            key={alt.id}
-                            type="button"
-                            role="radio"
-                            aria-checked={selected}
-                            aria-label={`Alternativa ${alt.letra}${selected ? ", selecionada" : ""}`}
-                            onClick={() => onAnswer(q, { alternativaId: alt.id })}
-                            className={cn(
-                              "relative flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] font-semibold transition-all duration-150 ease-out",
-                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1",
-                              "active:scale-[0.95] hover:scale-[1.02]",
-                              selected
-                                ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm"
-                                : "border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50/50"
-                            )}
-                          >
-                            <span className="transition-transform duration-150">{alt.letra}</span>
-                            {selected && (
-                              <span
-                                className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                                aria-hidden="true"
-                              >
-                                <span className="h-2 w-2 rounded-full bg-indigo-600 scale-100 transition-transform duration-150 ease-out" />
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="mt-1.5 text-[10px] text-slate-500">Clique na letra para responder</p>
-                  </div>
-                ) : (
+                {q.tipo !== "multiple" && (
                   <textarea
                     value={a?.textoResposta ?? ""}
                     onChange={(e) => onAnswer(q, { textoResposta: e.target.value })}

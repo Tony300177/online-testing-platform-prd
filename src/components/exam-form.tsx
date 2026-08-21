@@ -419,7 +419,7 @@ export default function ExamForm({
                         <iframe
                           src={pdfFile ? (previewUrl ?? "") : examId ? `/api/exams/${examId}/pdf` : ""}
                           title="Pré-visualização do PDF"
-                          className="h-[60vh] w-full rounded-xl border border-slate-200 bg-slate-50"
+                          className="h-[80vh] w-full rounded-xl border border-slate-200 bg-slate-50"
                         />
                       )}
                     </div>
@@ -587,9 +587,9 @@ export default function ExamForm({
                         onClick={() => markCorreta(q.key, a.key)}
                         title={a.correta ? "Correta ✓" : `Marcar ${String.fromCharCode(65 + oi)} como correta`}
                         className={cn(
-                          "flex h-12 w-12 items-center justify-center rounded-full border-2 text-base font-bold transition",
+                          "flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition",
                           a.correta
-                            ? "border-emerald-500 bg-emerald-100 text-emerald-700 shadow-sm"
+                            ? "border-emerald-500 bg-emerald-100 text-emerald-700"
                             : "border-slate-300 bg-white text-slate-600 hover:border-indigo-400 hover:bg-indigo-50"
                         )}
                       >

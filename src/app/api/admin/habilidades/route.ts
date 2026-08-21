@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { respostasAlunos, questoes } from "@/db/schema";
+import { respostasAlunos, questoes, provas } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -20,12 +20,13 @@ export async function GET(req: Request) {
         ra.aluno_turma AS "alunoTurma",
         ra.escola_nome AS "escolaNome",
         ra.correta,
-        q.disciplina,
+        p.disciplina,
         unnest(q.habilidade) AS habilidade
       FROM respostas_alunos ra
       INNER JOIN questoes q ON q.id = ra.questao_id
+      INNER JOIN provas p ON p.id = ra.prova_id
       WHERE ${sql.join(conditions, sql` AND `)}
-      ORDER BY ra.aluno_turma, ra.aluno_nome, q.disciplina
+      ORDER BY ra.aluno_turma, ra.aluno_nome, p.disciplina
     `);
 
     // Agrupar por aluno -> habilidade

@@ -29,12 +29,13 @@ export default async function AdminHabilidadesPage({
       ra.aluno_turma AS "alunoTurma",
       ra.escola_nome AS "escolaNome",
       ra.correta,
-      q.disciplina,
+      p.disciplina,
       unnest(q.habilidade) AS habilidade
     FROM respostas_alunos ra
     INNER JOIN questoes q ON q.id = ra.questao_id
+    INNER JOIN provas p ON p.id = ra.prova_id
     WHERE ${sql.join(conditions, sql` AND `)}
-    ORDER BY ra.aluno_turma, ra.aluno_nome, q.disciplina
+    ORDER BY ra.aluno_turma, ra.aluno_nome, p.disciplina
   `);
 
   // Agrupar: aluno -> disciplina -> habilidade -> {total, acertos}

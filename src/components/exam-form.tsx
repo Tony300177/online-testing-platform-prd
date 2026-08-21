@@ -575,11 +575,11 @@ export default function ExamForm({
               </div>
 
               {/* Alternativas — gabarito */}
-              <div className="mt-3">
-                  <p className="mb-2 text-xs font-semibold text-slate-500">
-                    Gabarito — clique na letra da resposta correta
+              <div className="mt-2">
+                  <p className="mb-1 text-[10px] font-semibold text-slate-500">
+                    Gabarito
                   </p>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     {q.alternativas.map((a, oi) => (
                       <button
                         key={a.key}
@@ -587,7 +587,7 @@ export default function ExamForm({
                         onClick={() => markCorreta(q.key, a.key)}
                         title={a.correta ? "Correta ✓" : `Marcar ${String.fromCharCode(65 + oi)} como correta`}
                         className={cn(
-                          "flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition",
+                          "flex h-6 w-6 items-center justify-center rounded-full border-2 text-[10px] font-bold transition",
                           a.correta
                             ? "border-emerald-500 bg-emerald-100 text-emerald-700"
                             : "border-slate-300 bg-white text-slate-600 hover:border-indigo-400 hover:bg-indigo-50"
@@ -597,14 +597,14 @@ export default function ExamForm({
                       </button>
                     ))}
                   </div>
-                  <div className="mt-2 flex items-center gap-2">
+                  <div className="mt-1.5 flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => addAlternativa(q.key)}
                       disabled={q.alternativas.length >= 8}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-indigo-300 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50 disabled:opacity-40"
+                      className="inline-flex items-center gap-1 rounded-lg border border-dashed border-indigo-300 px-2 py-1 text-[10px] font-semibold text-indigo-600 transition hover:bg-indigo-50 disabled:opacity-40"
                     >
-                      <Plus className="h-3.5 w-3.5" /> Alternativa
+                      <Plus className="h-3 w-3" /> Alt.
                     </button>
                     {q.alternativas.length > 2 && (
                       <button
@@ -613,9 +613,9 @@ export default function ExamForm({
                           const last = q.alternativas[q.alternativas.length - 1];
                           removeAlternativa(q.key, last.key);
                         }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-50"
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500 transition hover:bg-slate-50"
                       >
-                        Remover última
+                        Remover
                       </button>
                     )}
                   </div>

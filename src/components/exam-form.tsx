@@ -175,6 +175,7 @@ export default function ExamForm({
 
   function validate(requirePublish = false): string {
     if (draft.titulo.trim().length < 3) return "Informe um título para a prova.";
+    if (!pdfFile && (!draft.pdfName || removePdf)) return "Envie o arquivo da prova em PDF.";
     if (draft.questoes.length === 0) return "Adicione pelo menos uma questão.";
     for (let i = 0; i < draft.questoes.length; i++) {
       const q = draft.questoes[i];
@@ -393,7 +394,7 @@ export default function ExamForm({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
-              Arquivo da prova (PDF) — opcional
+              Arquivo da prova (PDF) <span className="text-rose-500">*</span>
             </label>
             {pdfFile || (draft.pdfName && !removePdf) ? (
               <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">

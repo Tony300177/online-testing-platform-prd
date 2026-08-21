@@ -1,10 +1,26 @@
 import { requireUser } from "@/lib/auth";
 import { db } from "@/db";
-import { escolas, provas } from "@/db/schema";
-import { Target, TrendingUp, Users, School, AlertCircle, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
+import { escolas, provas, respostasAlunos, questoes, desempenhoThresholds } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
+import { Target, School, AlertCircle, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
+
+function classificarDesempenho(pct: number, t: { verdeMin: number; amareloMin: number; laranjaMin: number }) {
+  if (pct >= t.verdeMin) return "verde";
+  if (pct >= t.amareloMin) return "amarelo";
+  if (pct >= t.laranjaMin) return "laranja";
+  return "vermelho";
+}
+function getCor(c: string) {
+  switch (c) {
+    case "verde": return { bg: "bg-emerald-100", text: "text-emerald-800", label: "Satisfatório" };
+    case "amarelo": return { bg: "bg-amber-100", text: "text-amber-800", label: "Em desenvolvimento" };
+    case "laranja": return { bg: "bg-orange-100", text: "text-orange-800", label: "Necessita acompanhamento" };
+    default: return { bg: "bg-rose-100", text: "text-rose-800", label: "Necessita intervenção" };
+  }
+}
 
 export default async function AdminHabilidadesDashboardGeralPage({
   searchParams,
@@ -20,34 +36,76 @@ export default async function AdminHabilidadesDashboardGeralPage({
     db.select({ id: provas.id, titulo: provas.titulo }).from(provas).orderBy(provas.id),
   ]);
 
-  const apiUrl = `/api/admin/habilidades/dashboard/geral${provaId ? `?provaId=${provaId}` : ""}${escolasRows.length === 1 ? `&escolaId=${escolasRows[0].id}` : ""}`;
-  const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ""}${apiUrl}`, { cache: "no-store" });
-  const json = await res.json();
+  const [thresholdRow] = await db
+    .select()
+    .from(desempenhoThresholds)
+    .where(sql`escola_id IS NULL`)
+    .limit(1);
+  const thresholds = thresholdRow ?? { verdeMin: 80, amareloMin: 60, laranjaMin: 40 };
 
-  if (!json.ok || !json.data) {
-    return (
-      <div className="text-center py-12 text-slate-500">
-        <Target className="mx-auto h-12 w-12 text-slate-300 mb-4" />
-        <p className="text-lg">Erro ao carregar dashboard</p>
-        <p className="text-sm mt-1">{json.error || "Sem dados"}</p>
-      </div>
-    );
+  const conditions = [sql`q.habilidade IS NOT NULL AND cardinality(q.habilidade) > 0`];
+  if (provaId) conditions.push(eq(respostasAlunos.provaId, Number(provaId)));
+
+  const { rows } = await db.execute(sql`
+    SELECT
+      ra.escola_nome AS "escolaNome",
+      q.disciplina,
+      unnest(q.habilidade) AS habilidade,
+      ra.correta
+    FROM respostas_alunos ra
+    INNER JOIN questoes q ON q.id = ra.questao_id
+    INNER JOIN provas p ON p.id = ra.prova_id
+    WHERE ${sql.join(conditions, sql` AND `)}
+  `);
+
+  type Count = { total: number; acertos: number };
+  const map: Record<string, Record<string, Record<string, Count>>> = {};
+
+  for (const r of rows as any[]) {
+    const escola = r.escolaNome ?? "—";
+    const disc = r.disciplina ?? "—";
+    const hab = r.habilidade;
+    if (!map[escola]) map[escola] = {};
+    if (!map[escola][disc]) map[escola][disc] = {};
+    if (!map[escola][disc][hab]) map[escola][disc][hab] = { total: 0, acertos: 0 };
+    map[escola][disc][hab].total++;
+    if (r.correta) map[escola][disc][hab].acertos++;
   }
 
-  const { data: escolasData, thresholds } = json;
+  const escolasData = Object.entries(map).map(([escolaNome, disciplinas]) => {
+    const discData = Object.entries(disciplinas).map(([disciplina, habs]) => {
+      const habData = Object.entries(habs).map(([habilidade, c]) => {
+        const pct = c.total > 0 ? Math.round((c.acertos / c.total) * 100) : 0;
+        const classif = classificarDesempenho(pct, thresholds);
+        return { habilidade, total: c.total, acertos: c.acertos, percentual: pct, classificacao: classif, ...getCor(classif) };
+      }).sort((a, b) => a.percentual - b.percentual);
+
+      const totalGeral = habData.reduce((s, h) => s + h.total, 0);
+      const acertosGeral = habData.reduce((s, h) => s + h.acertos, 0);
+      const mediaDisc = totalGeral > 0 ? Math.round((acertosGeral / totalGeral) * 100) : 0;
+      const classifDisc = classificarDesempenho(mediaDisc, thresholds);
+      return { disciplina, media: mediaDisc, classificacao: classifDisc, ...getCor(classifDisc), habilidades: habData };
+    });
+
+    const allHabs = discData.flatMap(d => d.habilidades);
+    const totalGeral = allHabs.reduce((s, h) => s + h.total, 0);
+    const acertosGeral = allHabs.reduce((s, h) => s + h.acertos, 0);
+    const mediaGeral = totalGeral > 0 ? Math.round((acertosGeral / totalGeral) * 100) : 0;
+    const classifGeral = classificarDesempenho(mediaGeral, thresholds);
+
+    const topDificuldade = [...allHabs]
+      .sort((a, b) => a.percentual - b.percentual)
+      .slice(0, 5)
+      .map(h => ({ habilidade: h.habilidade, percentual: h.percentual, disciplina: discData.find(d => d.habilidades.some(h2 => h2.habilidade === h.habilidade))?.disciplina }));
+
+    return { escolaNome, mediaGeral, classificacaoGeral: classifGeral, ...getCor(classifGeral), disciplinas: discData, topDificuldade };
+  });
 
   const ICONS = {
     verde: <CheckCircle className="h-4 w-4 text-emerald-600" />,
     amarelo: <AlertTriangle className="h-4 w-4 text-amber-600" />,
     laranja: <AlertCircle className="h-4 w-4 text-orange-600" />,
     vermelho: <XCircle className="h-4 w-4 text-rose-600" />,
-  };
-
-  const LABELS = {
-    verde: "Satisfatório (80-100%)",
-    amarelo: "Em desenvolvimento (60-79%)",
-    laranja: "Necessita acompanhamento (40-59%)",
-    vermelho: "Necessita intervenção (0-39%)",
   };
 
   return (
@@ -76,7 +134,6 @@ export default async function AdminHabilidadesDashboardGeralPage({
         </div>
       </div>
 
-      {/* Resumo dos Limiares */}
       <div className="mb-6 flex flex-wrap gap-2">
         {(["verde", "amarelo", "laranja", "vermelho"] as const).map((k) => (
           <span key={k} className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${{
@@ -85,7 +142,12 @@ export default async function AdminHabilidadesDashboardGeralPage({
             laranja: "bg-orange-100 text-orange-800",
             vermelho: "bg-rose-100 text-rose-800",
           }[k]}`}>
-            {ICONS[k]} {LABELS[k]}
+            {ICONS[k]} {
+              k === "verde" ? `Satisfatório (≥${thresholds.verdeMin}%)` :
+              k === "amarelo" ? `Em desenvolvimento (${thresholds.amareloMin}–${thresholds.verdeMin - 1}%)` :
+              k === "laranja" ? `Acompanhamento (${thresholds.laranjaMin}–${thresholds.amareloMin - 1}%)` :
+              `Intervenção (0–${thresholds.laranjaMin - 1}%)`
+            }
           </span>
         ))}
       </div>
@@ -96,7 +158,6 @@ export default async function AdminHabilidadesDashboardGeralPage({
         <div className="space-y-6">
           {escolasData.map((escola: any) => (
             <section key={escola.escolaNome} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-              {/* Cabeçalho da Escola */}
               <div className={`px-5 py-4 border-b border-slate-100 ${escola.bg} bg-opacity-50`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -106,13 +167,12 @@ export default async function AdminHabilidadesDashboardGeralPage({
                     </h2>
                     <p className="text-sm text-slate-500">
                       Média geral: <span className="font-semibold">{escola.mediaGeral}%</span> —
-                      <span className={escola.text}>{escola.label}</span> {ICONS[escola.classificacaoGeral as keyof typeof ICONS]}
+                      <span className={escola.text}> {escola.label}</span> {ICONS[escola.classificacaoGeral as keyof typeof ICONS]}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Top 5 Dificuldades */}
               {escola.topDificuldade.length > 0 && (
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
                   <h3 className="mb-2 text-sm font-semibold text-slate-700">Habilidades com maior dificuldade</h3>
@@ -127,7 +187,6 @@ export default async function AdminHabilidadesDashboardGeralPage({
                 </div>
               )}
 
-              {/* Disciplinas */}
               <div className="p-5">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {escola.disciplinas.map((disc: any) => (

@@ -1325,33 +1325,41 @@ function AnswerPanel({
                 </div>
 
                 {q.tipo === "multiple" ? (
-                  <div className="mt-3 space-y-2">
-                    {q.alternativas.map((alt) => {
-                      const selected = a?.alternativaId === alt.id;
-                      return (
-                        <button
-                          key={alt.id}
-                          type="button"
-                          onClick={() => onAnswer(q, { alternativaId: alt.id })}
-                          className={cn(
-                            "flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition",
-                            selected
-                              ? "border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200"
-                              : "border-slate-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/40"
-                          )}
-                        >
-                          <span
+                  <div className="mt-3" role="radiogroup" aria-label={`Alternativas da questão ${q.numero}`}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {q.alternativas.map((alt) => {
+                        const selected = a?.alternativaId === alt.id;
+                        return (
+                          <button
+                            key={alt.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            aria-label={`Alternativa ${alt.letra}${selected ? ", selecionada" : ""}`}
+                            onClick={() => onAnswer(q, { alternativaId: alt.id })}
                             className={cn(
-                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                              selected ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"
+                              "relative flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold transition-all duration-150 ease-out",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1",
+                              "active:scale-[0.95] hover:scale-[1.02]",
+                              selected
+                                ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm"
+                                : "border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50/50"
                             )}
                           >
-                            {alt.letra}
-                          </span>
-                          <span className="text-[13px] leading-snug text-slate-800">{alt.texto}</span>
-                        </button>
-                      );
-                    })}
+                            <span className="transition-transform duration-150">{alt.letra}</span>
+                            {selected && (
+                              <span
+                                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                                aria-hidden="true"
+                              >
+                                <span className="h-2.5 w-2.5 rounded-full bg-indigo-600 scale-100 transition-transform duration-150 ease-out" />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-[11px] text-slate-500">Clique na letra para responder</p>
                   </div>
                 ) : (
                   <textarea

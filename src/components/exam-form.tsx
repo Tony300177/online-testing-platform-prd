@@ -11,6 +11,7 @@ import {
   Save,
   Send,
   Trash2,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getHabilidadesPorDisciplina, CATEGORIA_LABEL, type HabilidadeCategoria } from "@/lib/habilidades";
@@ -149,6 +150,9 @@ export default function ExamForm({
         a.key === altKey ? { ...a, ...patch } : a
       ),
     });
+  }
+  function updateAlternativa(questaoKey: string, altKey: string, texto: string) {
+    setAlternativa(questaoKey, altKey, { texto });
   }
   function markCorreta(questaoKey: string, altKey: string) {
     updateQuestao(questaoKey, {
@@ -574,32 +578,41 @@ export default function ExamForm({
               {/* Alternativas */}
               <div className="mt-4">
                   <p className="mb-2 text-xs font-semibold text-slate-500">
-                    Alternativas — marque a resposta correta
+                    Alternativas — digite o texto e marque a correta
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="space-y-1.5">
                     {q.alternativas.map((a, oi) => (
-                      <button
-                        key={a.key}
-                        type="button"
-                        onClick={() => markCorreta(q.key, a.key)}
-                        title={`Alternativa ${String.fromCharCode(65 + oi)} — clique para marcar como correta`}
-                        className={cn(
-                          "inline-flex items-center gap-2 rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition",
-                          a.correta
-                            ? "border-emerald-500 bg-emerald-100 text-emerald-700"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50"
-                        )}
-                      >
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold"
-                          style={{
-                            borderColor: a.correta ? "#10b981" : "#cbd5e1",
-                            backgroundColor: a.correta ? "#d1fae5" : "transparent",
-                          }}
+                      <div key={a.key} className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => markCorreta(q.key, a.key)}
+                          title={a.correta ? "Alternativa correta" : "Clique para marcar como correta"}
+                          className={cn(
+                            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition",
+                            a.correta
+                              ? "border-emerald-500 bg-emerald-100 text-emerald-700"
+                              : "border-slate-200 bg-white text-slate-500 hover:border-indigo-300"
+                          )}
                         >
                           {a.correta ? "✓" : String.fromCharCode(65 + oi)}
-                        </span>
-                        <span className="max-w-[160px] truncate">{a.texto || String.fromCharCode(65 + oi)}</span>
-                      </button>
+                        </button>
+                        <input
+                          type="text"
+                          value={a.texto}
+                          onChange={(e) => updateAlternativa(q.key, a.key, e.target.value)}
+                          placeholder={`Texto da alternativa ${String.fromCharCode(65 + oi)}`}
+                          className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-300 focus:border-indigo-400"
+                        />
+                        {q.alternativas.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeAlternativa(q.key, a.key)}
+                            className="shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                   <div className="mt-2 flex items-center gap-2">

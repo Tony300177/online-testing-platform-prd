@@ -91,8 +91,8 @@ export function parseProvaPayload(body: unknown): { ok: true; value: ProvaInput 
         });
       }
 
-      if (alternativas.length < 2) {
-        errors.push(`A questão ${i + 1} precisa de pelo menos 2 alternativas preenchidas.`);
+      if (alternativas.length < 1) {
+        errors.push(`A questão ${i + 1} precisa de pelo menos 1 alternativa preenchida.`);
         return;
       }
       if (alternativas.filter((a) => a.correta).length !== 1) {

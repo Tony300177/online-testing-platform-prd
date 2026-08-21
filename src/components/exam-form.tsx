@@ -177,7 +177,7 @@ export default function ExamForm({
       if (q.valor <= 0) return `A questão ${i + 1} precisa de um valor maior que zero.`;
       if (q.tipo === "multiple") {
         const filled = q.alternativas.filter((a) => a.texto.trim());
-        if (filled.length < 2) return `A questão ${i + 1} precisa de pelo menos 2 alternativas preenchidas.`;
+        if (filled.length < 1) return `A questão ${i + 1} precisa de pelo menos 1 alternativa preenchida.`;
         if (!q.alternativas.some((a) => a.correta && a.texto.trim()))
           return `Marque a alternativa correta da questão ${i + 1}.`;
       }

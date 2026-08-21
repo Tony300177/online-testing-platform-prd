@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Users, CheckCircle, AlertTriangle, AlertCircle, XCircle } from "lucide-react";
+import { Users, School, CheckCircle, AlertTriangle, AlertCircle, XCircle } from "lucide-react";
 import Link from "next/link";
 
 export default function DashboardTurmaPage() {
+  const [escolas, setEscolas] = useState<{ id: string; nome: string }[]>([]);
+  const [escolaId, setEscolaId] = useState("");
   const [turmas, setTurmas] = useState<{ id: string; nome: string; escolaId: string }[]>([]);
   const [turmaId, setTurmaId] = useState("");
   const [data, setData] = useState<any>(null);
@@ -14,15 +16,35 @@ export default function DashboardTurmaPage() {
     fetch("/api/admin/habilidades/dashboard/turma")
       .then(r => r.json())
       .then(json => {
-        if (json.ok && json.data?.turmas) {
-          setTurmas(json.data.turmas);
-          if (json.data.turmas.length === 1) {
-            setTurmaId(json.data.turmas[0].id);
-          }
+        if (json.ok && json.data) {
+          setEscolas(json.data.escolas || []);
+          setTurmas(json.data.turmas || []);
+          if (json.data.escolas?.length === 1) setEscolaId(json.data.escolas[0].id);
+          if (json.data.turmas?.length === 1) setTurmaId(json.data.turmas[0].id);
         }
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!escolaId) {
+      fetch("/api/admin/habilidades/dashboard/turma")
+        .then(r => r.json())
+        .then(json => { if (json.ok && json.data) setTurmas(json.data.turmas || []); })
+        .catch(() => {});
+      return;
+    }
+    fetch(`/api/admin/habilidades/dashboard/turma?escolaId=${escolaId}`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.ok && json.data) {
+          setTurmas(json.data.turmas || []);
+          setTurmaId("");
+          setData(null);
+        }
+      })
+      .catch(() => {});
+  }, [escolaId]);
 
   const fetchData = useCallback(async (tid: string) => {
     if (!tid) { setData(null); return; }
@@ -39,6 +61,8 @@ export default function DashboardTurmaPage() {
   useEffect(() => {
     if (turmaId) fetchData(turmaId);
   }, [turmaId, fetchData]);
+
+  const filteredTurmas = escolaId ? turmas.filter(t => t.escolaId === escolaId) : turmas;
 
   const ICONS: Record<string, React.ReactNode> = {
     verde: <CheckCircle className="h-4 w-4 text-emerald-600" />,
@@ -57,14 +81,26 @@ export default function DashboardTurmaPage() {
           </h1>
           <p className="mt-1 text-sm text-slate-500">Média, ranking e habilidades por turma.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          {escolas.length > 1 && (
+            <select
+              value={escolaId}
+              onChange={e => { setEscolaId(e.target.value); setTurmaId(""); setData(null); }}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            >
+              <option value="">Todas as escolas</option>
+              {escolas.map(e => (
+                <option key={e.id} value={e.id}>{e.nome}</option>
+              ))}
+            </select>
+          )}
           <select
             value={turmaId}
             onChange={e => setTurmaId(e.target.value)}
             className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
           >
             <option value="">Selecione a turma...</option>
-            {turmas.map(t => (
+            {filteredTurmas.map(t => (
               <option key={t.id} value={t.id}>{t.nome}</option>
             ))}
           </select>

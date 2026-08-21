@@ -29,8 +29,14 @@ export async function GET(req: Request) {
     const provaId = searchParams.get("provaId");
 
     if (!turmaId) {
-      const turmasList = await db.select({ id: turmas.id, nome: turmas.nome, escolaId: turmas.escolaId }).from(turmas).orderBy(turmas.nome);
-      return NextResponse.json({ ok: true, data: { turmas: turmasList } });
+      const escolasList = await db.select({ id: escolas.id, nome: escolas.nome }).from(escolas).orderBy(escolas.nome);
+      const turmasConditions = escolaId ? [eq(turmas.escolaId, escolaId)] : [];
+      const turmasList = await db
+        .select({ id: turmas.id, nome: turmas.nome, escolaId: turmas.escolaId })
+        .from(turmas)
+        .where(turmasConditions.length ? turmasConditions[0] : sql`1=1`)
+        .orderBy(turmas.nome);
+      return NextResponse.json({ ok: true, data: { escolas: escolasList, turmas: turmasList } });
     }
 
     const [thresholdRow] = await db

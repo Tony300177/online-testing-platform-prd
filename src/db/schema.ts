@@ -8,6 +8,7 @@ import {
   serial,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -231,3 +232,18 @@ export type Questao = typeof questoes.$inferSelect;
 export type Alternativa = typeof alternativas.$inferSelect;
 export type RespostaAluno = typeof respostasAlunos.$inferSelect;
 export type Resultado = typeof resultados.$inferSelect;
+
+/** Configuração de limiares de desempenho (configurável pela coordenação). */
+export const desempenhoThresholds = pgTable("desempenho_thresholds", {
+  id: serial("id").primaryKey(),
+  escolaId: uuid("escola_id").references(() => escolas.id, { onDelete: "cascade" }),
+  verdeMin: integer("verde_min").notNull().default(80),    // 80-100: Satisfatório
+  amareloMin: integer("amarelo_min").notNull().default(60), // 60-79: Em desenvolvimento
+  laranjaMin: integer("laranja_min").notNull().default(40), // 40-59: Necessita acompanhamento
+  // vermelho: 0-39: Necessita intervenção
+  criadoEm: timestamp("criado_em", { withTimezone: true }).defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("thresholds_escola_idx").on(t.escolaId),
+  unique("thresholds_escola_unique").on(t.escolaId),
+]);

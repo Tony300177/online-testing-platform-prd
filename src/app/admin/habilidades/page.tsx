@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/db";
 import { respostasAlunos, questoes, provas } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { Target, Download } from "lucide-react";
+import { Target, Download, School, Users, UserCheck, Settings } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +99,22 @@ export default async function AdminHabilidadesPage({
             </a>
           )}
         </div>
+      </div>
+
+      {/* Navegação dos Dashboards */}
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <Link href="/admin/habilidades/dashboard/geral" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-indigo-300 hover:bg-indigo-50/50 transition">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600"><School className="h-5 w-5" /></div>
+          <div><p className="text-sm font-bold text-slate-800">Dashboard Geral</p><p className="text-[11px] text-slate-500">Visão consolidada por escola</p></div>
+        </Link>
+        <Link href="/admin/habilidades/dashboard/turma" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-indigo-300 hover:bg-indigo-50/50 transition">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-600"><Users className="h-5 w-5" /></div>
+          <div><p className="text-sm font-bold text-slate-800">Dashboard Turma</p><p className="text-[11px] text-slate-500">Ranking e média da turma</p></div>
+        </Link>
+        <Link href="/admin/habilidades/config" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-indigo-300 hover:bg-indigo-50/50 transition">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600"><Settings className="h-5 w-5" /></div>
+          <div><p className="text-sm font-bold text-slate-800">Configurar Limiares</p><p className="text-[11px] text-slate-500">Ajustar thresholds de desempenho</p></div>
+        </Link>
       </div>
 
       {data.length === 0 ? (

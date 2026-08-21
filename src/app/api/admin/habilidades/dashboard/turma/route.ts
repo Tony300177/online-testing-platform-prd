@@ -28,7 +28,10 @@ export async function GET(req: Request) {
     const turmaId = searchParams.get("turmaId");
     const provaId = searchParams.get("provaId");
 
-    if (!turmaId) return NextResponse.json({ ok: false, error: "turmaId é obrigatório" }, { status: 400 });
+    if (!turmaId) {
+      const turmasList = await db.select({ id: turmas.id, nome: turmas.nome, escolaId: turmas.escolaId }).from(turmas).orderBy(turmas.nome);
+      return NextResponse.json({ ok: true, data: { turmas: turmasList } });
+    }
 
     const [thresholdRow] = await db
       .select()

@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   BarChart3,
   Building2,
+  ChevronDown,
   ClipboardList,
   FilePlus2,
   LayoutDashboard,
@@ -19,18 +21,29 @@ import {
 import { cn } from "@/lib/utils";
 import Logo from "@/components/logo";
 
-type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
+type NavItem = { 
+  label: string; 
+  icon: React.ComponentType<{ className?: string }>;
+  href?: string;
+  children?: NavItem[];
+};
 
 const NAV: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/dashboard", label: "Turma/Escola", icon: School },
+  { 
+    label: "Escolar", 
+    icon: School, 
+    children: [
+      { href: "/admin/dashboard", label: "Turma/Escola", icon: School },
+      { href: "/admin/alunos", label: "Alunos", icon: Users },
+    ] 
+  },
   { href: "/professor", label: "Provas", icon: ClipboardList },
   { href: "/professor/nova", label: "Nova prova", icon: FilePlus2 },
   { href: "/professor/cadastro", label: "Cadastro", icon: Building2 },
   { href: "/admin/importar", label: "Importar", icon: UploadCloud },
   { href: "/admin/estatisticas", label: "Estatísticas", icon: PieChart },
   { href: "/admin/habilidades", label: "Habilidades", icon: Target },
-  { href: "/admin/alunos", label: "Alunos", icon: Users },
   { href: "/admin/respostas", label: "Respostas", icon: ListChecks },
 ];
 
@@ -65,10 +78,56 @@ export default function Shell({
                 item.href === "/professor" || item.href === "/admin"
                   ? pathname === item.href
                   : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const childActive = item.children?.some(
+                (child) => pathname === child.href || pathname.startsWith(`${child.href}/`)
+              );
+
+              if (item.children) {
+                const [open, setOpen] = useState(false);
+                return (
+                  <div key={item.label} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setOpen(!open)}
+                      className={cn(
+                        "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition",
+                        (active || childActive) ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      )}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {item.label}
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
+                    </button>
+                    {open && (
+                      <div className="absolute right-0 mt-1 w-44 rounded-xl border border-slate-200 bg-white py-1 shadow-lg z-50">
+                        {item.children.map((child) => {
+                          const childIsActive = pathname === child.href || pathname.startsWith(`${child.href}/`);
+                          return (
+                            <Link
+                              key={child.href}
+                              href={child.href!}
+                              className={cn(
+                                "flex items-center gap-2 px-3 py-2 text-sm font-medium transition",
+                                childIsActive
+                                  ? "bg-indigo-50 text-indigo-700"
+                                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                              )}
+                            >
+                              <child.icon className="h-4 w-4" />
+                              {child.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               return (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={item.href!}
                   className={cn(
                     "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition",
                     active

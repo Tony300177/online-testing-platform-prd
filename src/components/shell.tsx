@@ -38,13 +38,19 @@ const NAV: NavItem[] = [
       { href: "/admin/alunos", label: "Alunos", icon: Users },
     ] 
   },
-  { href: "/professor", label: "Provas", icon: ClipboardList },
-  { href: "/professor/nova", label: "Nova prova", icon: FilePlus2 },
+  { 
+    label: "Avaliações", 
+    icon: ClipboardList, 
+    children: [
+      { href: "/professor", label: "Provas", icon: ClipboardList },
+      { href: "/professor/nova", label: "Nova prova", icon: FilePlus2 },
+      { href: "/admin/respostas", label: "Respostas", icon: ListChecks },
+    ] 
+  },
   { href: "/professor/cadastro", label: "Cadastro", icon: Building2 },
   { href: "/admin/importar", label: "Importar", icon: UploadCloud },
   { href: "/admin/estatisticas", label: "Estatísticas", icon: PieChart },
   { href: "/admin/habilidades", label: "Habilidades", icon: Target },
-  { href: "/admin/respostas", label: "Respostas", icon: ListChecks },
 ];
 
 export default function Shell({

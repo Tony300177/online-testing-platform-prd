@@ -72,7 +72,7 @@ export default function Shell({
             <Logo className="h-14 w-auto" />
           </Link>
 
-          <nav className="order-3 flex w-full items-center gap-1 overflow-x-auto sm:order-none sm:w-auto sm:flex-1">
+          <nav className="order-3 flex w-full items-center gap-1 sm:order-none sm:w-auto sm:flex-1">
             {NAV.map((item) => {
               const active =
                 item.href === "/professor" || item.href === "/admin"

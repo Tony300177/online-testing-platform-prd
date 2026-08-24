@@ -66,7 +66,7 @@ export default function ConfigThresholdsPage() {
           <div className="space-y-4">
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-emerald-700 mb-1">
-                <CheckCircle className="h-4 w-4" /> Satisfatório Alto — mínimo (%)
+                <CheckCircle className="h-4 w-4" /> Alto — mínimo (%)
               </label>
               <input
                 type="number" min={0} max={100} value={form.verdeMin}
@@ -76,7 +76,7 @@ export default function ConfigThresholdsPage() {
             </div>
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-amber-700 mb-1">
-                <AlertTriangle className="h-4 w-4" /> Em desenvolvimento Médio — mínimo (%)
+                <AlertTriangle className="h-4 w-4" /> Médio Alto — mínimo (%)
               </label>
               <input
                 type="number" min={0} max={100} value={form.amareloMin}
@@ -86,7 +86,7 @@ export default function ConfigThresholdsPage() {
             </div>
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-orange-700 mb-1">
-                <AlertCircle className="h-4 w-4" /> Acompanhamento Médio Baixo — mínimo (%)
+                <AlertCircle className="h-4 w-4" /> Médio Baixo — mínimo (%)
               </label>
               <input
                 type="number" min={0} max={100} value={form.laranjaMin}
@@ -99,10 +99,10 @@ export default function ConfigThresholdsPage() {
           <div className="mt-6 p-4 rounded-lg bg-slate-50 border border-slate-200">
             <p className="text-xs font-semibold text-slate-600 mb-2">Preview:</p>
             <div className="space-y-1 text-xs">
-              <div className="flex items-center gap-2"><CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> <span className="text-slate-700">Satisfatório Alto: <b>{form.verdeMin}%–100%</b></span></div>
-              <div className="flex items-center gap-2"><AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> <span className="text-slate-700">Em desenvolvimento Médio: <b>{form.amareloMin}%–{form.verdeMin - 1}%</b></span></div>
-              <div className="flex items-center gap-2"><AlertCircle className="h-3.5 w-3.5 text-orange-600" /> <span className="text-slate-700">Acompanhamento Médio Baixo: <b>{form.laranjaMin}%–{form.amareloMin - 1}%</b></span></div>
-              <div className="flex items-center gap-2"><XCircle className="h-3.5 w-3.5 text-rose-600" /> <span className="text-slate-700">Intervenção Baixo: <b>0%–{form.laranjaMin - 1}%</b></span></div>
+              <div className="flex items-center gap-2"><CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> <span className="text-slate-700">Alto: <b>{form.verdeMin}%–100%</b></span></div>
+              <div className="flex items-center gap-2"><AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> <span className="text-slate-700">Médio Alto: <b>{form.amareloMin}%–{form.verdeMin - 1}%</b></span></div>
+              <div className="flex items-center gap-2"><AlertCircle className="h-3.5 w-3.5 text-orange-600" /> <span className="text-slate-700">Médio Baixo: <b>{form.laranjaMin}%–{form.amareloMin - 1}%</b></span></div>
+              <div className="flex items-center gap-2"><XCircle className="h-3.5 w-3.5 text-rose-600" /> <span className="text-slate-700">Baixo: <b>0%–{form.laranjaMin - 1}%</b></span></div>
             </div>
           </div>
 

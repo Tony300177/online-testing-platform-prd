@@ -47,10 +47,22 @@ const NAV: NavItem[] = [
       { href: "/admin/respostas", label: "Respostas", icon: ListChecks },
     ] 
   },
-  { href: "/professor/cadastro", label: "Cadastro", icon: Building2 },
-  { href: "/admin/importar", label: "Importar", icon: UploadCloud },
-  { href: "/admin/estatisticas", label: "Estatísticas", icon: PieChart },
-  { href: "/admin/habilidades", label: "Habilidades", icon: Target },
+  { 
+    label: "Processamento", 
+    icon: Building2, 
+    children: [
+      { href: "/professor/cadastro", label: "Cadastro", icon: Building2 },
+      { href: "/admin/importar", label: "Importar", icon: UploadCloud },
+    ] 
+  },
+  { 
+    label: "Aprendizagem", 
+    icon: Target, 
+    children: [
+      { href: "/admin/habilidades", label: "Habilidades", icon: Target },
+      { href: "/admin/estatisticas", label: "Estatísticas", icon: PieChart },
+    ] 
+  },
 ];
 
 export default function Shell({

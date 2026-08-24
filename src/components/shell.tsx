@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   BarChart3,
   Building2,
@@ -84,8 +84,20 @@ export default function Shell({
 
               if (item.children) {
                 const [open, setOpen] = useState(false);
+                const dropdownRef = useRef<HTMLDivElement>(null);
+                useEffect(() => {
+                  function handleClickOutside(e: MouseEvent) {
+                    if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                      setOpen(false);
+                    }
+                  }
+                  if (open) {
+                    document.addEventListener("mousedown", handleClickOutside);
+                  }
+                  return () => document.removeEventListener("mousedown", handleClickOutside);
+                }, [open]);
                 return (
-                  <div key={item.label} className="relative">
+                  <div key={item.label} className="relative" ref={dropdownRef}>
                     <button
                       type="button"
                       onClick={() => setOpen(!open)}

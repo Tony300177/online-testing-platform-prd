@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { provas } from "@/db/schema";
+import { provas, escolas, turmas } from "@/db/schema";
 import {
   getHabilidadesAnalise,
   getHabilidadesFilterOptions,
@@ -30,6 +30,7 @@ export default async function HabilidadesAnalisePage({ searchParams }: { searchP
   }
 
   const sp = await searchParams;
+  const escolaId = str(sp, "escolaId");
   const provaId = str(sp, "provaId");
   const turmaId = str(sp, "turmaId");
   const habilidade = str(sp, "habilidade");
@@ -44,6 +45,15 @@ export default async function HabilidadesAnalisePage({ searchParams }: { searchP
   if (alunoId) filters.alunoId = alunoId;
   if (periodoInicio) filters.periodoInicio = periodoInicio;
   if (periodoFim) filters.periodoFim = periodoFim;
+
+  // Buscar escolas e turmas (filtrar turmas por escola se selecionada)
+  const escolasList = await db.select({ id: escolas.id, nome: escolas.nome }).from(escolas).orderBy(escolas.nome);
+  const turmasConditions = escolaId ? [eq(turmas.escolaId, escolaId)] : [];
+  const turmasList = await db
+    .select({ id: turmas.id, nome: turmas.nome, escolaId: turmas.escolaId })
+    .from(turmas)
+    .where(turmasConditions.length ? turmasConditions[0] : sql`1=1`)
+    .orderBy(turmas.nome);
 
   const [options, analise] = await Promise.all([
     getHabilidadesFilterOptions(allowedProvaIds),
@@ -89,17 +99,27 @@ export default async function HabilidadesAnalisePage({ searchParams }: { searchP
       : { rows: [] };
 
   const query = new URLSearchParams();
-  for (const [k, v] of Object.entries({ provaId, turmaId, habilidade, alunoId, periodoInicio, periodoFim })) {
+  for (const [k, v] of Object.entries({ escolaId, provaId, turmaId, habilidade, alunoId, periodoInicio, periodoFim })) {
     if (v) query.set(k, v);
   }
 
   const provaTitulo = options.provas.find((p) => String(p.id) === provaId)?.titulo;
-  const turmaNome = options.turmas.find((t) => t.id === turmaId)?.nome;
+  const turmaNome = turmasList.find((t) => t.id === turmaId)?.nome;
+  const escolaNome = escolasList.find((e) => e.id === escolaId)?.nome;
 
   return (
     <div>
       {/* Filtros */}
       <form method="get" className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Escola</label>
+          <select name="escolaId" defaultValue={escolaId} className="max-w-[200px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <option value="">Todas as escolas</option>
+            {escolasList.map((e) => (
+              <option key={e.id} value={e.id}>{e.nome}</option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Avaliação</label>
           <select name="provaId" defaultValue={provaId} className="max-w-[220px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
@@ -113,7 +133,7 @@ export default async function HabilidadesAnalisePage({ searchParams }: { searchP
           <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Turma</label>
           <select name="turmaId" defaultValue={turmaId} className="max-w-[180px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
             <option value="">Todas as turmas</option>
-            {options.turmas.map((t) => (
+            {turmasList.map((t) => (
               <option key={t.id} value={t.id}>{t.nome}</option>
             ))}
           </select>
@@ -152,7 +172,7 @@ export default async function HabilidadesAnalisePage({ searchParams }: { searchP
         </a>
       </form>
 
-      <HabilidadesAnaliseView data={analise} query={query.toString()} filtrosInfo={{ provaTitulo, turmaNome }} />
+      <HabilidadesAnaliseView data={analise} query={query.toString()} filtrosInfo={{ provaTitulo, turmaNome, escolaNome }} />
     </div>
   );
 }

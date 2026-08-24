@@ -107,7 +107,7 @@ export default function HabilidadesAnaliseView({
 }: {
   data: HabilidadeAnalise;
   query: string;
-  filtrosInfo: { provaTitulo?: string; turmaNome?: string };
+  filtrosInfo: { provaTitulo?: string; turmaNome?: string; escolaNome?: string };
 }) {
   const [selecionada, setSelecionada] = useState<string | null>(null);
 
@@ -157,6 +157,7 @@ export default function HabilidadesAnaliseView({
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Cada ocorrência da habilidade em cada questão × cada aluno é contada individualmente.
+            {filtrosInfo.escolaNome ? ` Escola: ${filtrosInfo.escolaNome}.` : ""}
             {filtrosInfo.provaTitulo ? ` Avaliação: ${filtrosInfo.provaTitulo}.` : ""}
             {filtrosInfo.turmaNome ? ` Turma: ${filtrosInfo.turmaNome}.` : ""}
           </p>

@@ -49,6 +49,7 @@ export default async function EditExamPage({ params }: { params: Promise<{ id: s
         tipo: "multiple",
         valor: Number(q.valor) || 1,
         habilidade: Array.isArray(q.habilidade) ? q.habilidade : q.habilidade ? [q.habilidade] : [],
+        disciplina: (prova.disciplina === "MATEMÁTICA" ? "MATEMÁTICA" : "LÍNGUA PORTUGUESA"),
         alternativas: (altByQuestao.get(q.id) ?? []).map((a) => ({
           key: `a-${a.id}`,
           texto: a.texto,

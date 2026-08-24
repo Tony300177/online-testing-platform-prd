@@ -27,6 +27,7 @@ export type QuestaoDraft = {
   tipo: "multiple";
   valor: number;
   habilidade: string[];
+  disciplina: "LÍNGUA PORTUGUESA" | "MATEMÁTICA";
   alternativas: AlternativaDraft[];
 };
 
@@ -52,6 +53,7 @@ const EMPTY_QUESTION = (): QuestaoDraft => ({
   tipo: "multiple",
   valor: 1,
   habilidade: [],
+  disciplina: "LÍNGUA PORTUGUESA",
   alternativas: [
     { key: KEY(), texto: "A", correta: false },
     { key: KEY(), texto: "B", correta: false },
@@ -220,7 +222,8 @@ export default function ExamForm({
 
       const fd = new FormData();
       fd.append("titulo", draft.titulo);
-      fd.append("disciplina", draft.disciplina);
+      // Deriva disciplina da primeira questão (ou deixa vazio)
+      fd.append("disciplina", draft.questoes[0]?.disciplina || "");
       fd.append("escolaId", draft.escolaId);
       fd.append("turma", draft.turma);
       fd.append("instrucoes", draft.instrucoes);
@@ -285,34 +288,22 @@ export default function ExamForm({
               className="w-full rounded-xl border border-slate-300 px-4 py-2.5 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
             />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Disciplina</label>
-              <select
-                value={draft.disciplina}
-                onChange={(e) => update({ disciplina: e.target.value })}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-              >
-                <option value="">Selecione a disciplina...</option>
-                <option value="LÍNGUA PORTUGUESA">LÍNGUA PORTUGUESA</option>
-                <option value="MATEMÁTICA">MATEMÁTICA</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Escola</label>
-              <select
-                value={draft.escolaId}
-                onChange={(e) => update({ escolaId: e.target.value, turma: "" })}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-              >
-                <option value="">Todas as escolas / não informada</option>
-                {escolas.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
+<div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Escola</label>
+                <select
+                  value={draft.escolaId}
+                  onChange={(e) => update({ escolaId: e.target.value, turma: "" })}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                >
+                  <option value="">Todas as escolas / não informada</option>
+                  {escolas.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -474,7 +465,17 @@ export default function ExamForm({
           {draft.questoes.map((q, index) => (
             <div key={q.key} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-bold text-slate-900">Questão {index + 1}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-slate-900">Questão {index + 1}</p>
+                  <select
+                    value={q.disciplina}
+                    onChange={(e) => updateQuestao(q.key, { disciplina: e.target.value as "LÍNGUA PORTUGUESA" | "MATEMÁTICA", habilidade: [] })}
+                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  >
+                    <option value="LÍNGUA PORTUGUESA">Língua Portuguesa</option>
+                    <option value="MATEMÁTICA">Matemática</option>
+                  </select>
+                </div>
                 <div className="flex items-center gap-1.5">
                   <label className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700">
                     Valor
@@ -534,10 +535,10 @@ export default function ExamForm({
                     </button>
                   )}
                 </div>
-                {draft.disciplina ? (
+                {q.disciplina ? (
                   <div className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-3">
                     {(["vigente", "sensivel", "preditora"] as HabilidadeCategoria[]).map((cat) => {
-                      const habs = getHabilidadesPorDisciplina(draft.disciplina as "LÍNGUA PORTUGUESA" | "MATEMÁTICA").filter((h) => h.categoria === cat);
+                      const habs = getHabilidadesPorDisciplina(q.disciplina as "LÍNGUA PORTUGUESA" | "MATEMÁTICA").filter((h) => h.categoria === cat);
                       if (habs.length === 0) return null;
                       const catSelected = habs.filter((h) => q.habilidade.includes(h.codigo)).length;
                       return (
@@ -571,7 +572,7 @@ export default function ExamForm({
                     })}
                   </div>
                 ) : (
-                  <p className="mt-1 text-[11px] text-slate-400">Selecione a disciplina primeiro.</p>
+                  <p className="mt-1 text-[11px] text-slate-400">Selecione a disciplina acima.</p>
                 )}
               </div>
 

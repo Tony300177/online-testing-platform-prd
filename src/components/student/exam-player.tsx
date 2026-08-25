@@ -916,6 +916,7 @@ export default function ExamPlayer({ code }: { code: string }) {
                     .getElementById(`q-${questions[index].id}`)
                     ?.scrollIntoView({ behavior: "smooth", block: "center" });
                 }}
+                disciplina={exam?.disciplina || "LÍNGUA PORTUGUESA"}
               />
             </aside>
           </div>
@@ -1021,12 +1022,14 @@ function GabaritoPanel({
   flagged,
   onMark,
   onNavigate,
+  disciplina,
 }: {
   questions: StudentQuestion[];
   answers: AnswerMap;
   flagged: Set<number>;
   onMark: (q: StudentQuestion, alternativaId: number) => void;
   onNavigate: (index: number) => void;
+  disciplina: string;
 }) {
   const answered = questions.filter((q) => {
     const a = answers[q.id];
@@ -1054,7 +1057,9 @@ function GabaritoPanel({
           const selected = answer?.alternativaId ?? null;
           const selectedAlt = selected !== null ? q.alternativas.find((a) => a.id === selected) : null;
           const isFlagged = flagged.has(q.id);
-          return (
+          const qColor = disciplina === "MATEMÁTICA" ? "bg-blue-600 hover:bg-blue-700" : "bg-emerald-600 hover:bg-emerald-700";
+
+            return (
             <div
               key={q.id}
               className={cn("rounded-xl border p-2.5 transition", isFlagged ? "border-amber-200 bg-amber-50/50" : "border-slate-200")}
@@ -1066,7 +1071,7 @@ function GabaritoPanel({
                       type="button"
                       onClick={() => onNavigate(qi)}
                       title={`Ir para a questão ${q.numero}`}
-                      className="mr-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-xs font-bold text-white transition hover:bg-indigo-700"
+                      className={`mr-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white transition ${qColor}`}
                     >
                       {q.numero}
                     </button>

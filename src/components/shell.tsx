@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import {
   BarChart3,
+  BookOpen,
   Building2,
   ChevronDown,
   ClipboardList,
@@ -86,7 +87,8 @@ export default function Shell({
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-          <Link href={home} className="flex items-center">
+          <Link href={home} className="flex items-center gap-2">
+            <BookOpen className="h-7 w-7 text-indigo-600" />
             <Logo className="h-14 w-auto" />
           </Link>
 

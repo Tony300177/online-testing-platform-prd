@@ -466,7 +466,7 @@ export default function ExamForm({
             <div key={q.key} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <p className="font-bold text-slate-900">Questão {index + 1}</p>
+                  <p className={`font-bold ${q.disciplina === "LÍNGUA PORTUGUESA" ? "text-emerald-700" : "text-slate-900"}`}>Questão {index + 1}</p>
                   <select
                     value={q.disciplina}
                     onChange={(e) => updateQuestao(q.key, { disciplina: e.target.value as "LÍNGUA PORTUGUESA" | "MATEMÁTICA", habilidade: [] })}

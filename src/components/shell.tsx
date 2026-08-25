@@ -90,6 +90,7 @@ export default function Shell({
           <Link href={home} className="flex items-center gap-2">
             <BookOpen className="h-7 w-7 text-indigo-600" />
             <Logo className="h-14 w-auto" />
+            <span className="hidden sm:block text-xl font-bold text-indigo-700">SabeTudo</span>
           </Link>
 
           <nav className="order-3 flex w-full items-center gap-1 sm:order-none sm:w-auto sm:flex-1">

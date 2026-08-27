@@ -48,6 +48,7 @@ export type DashboardData = {
     percentual: number;
     criadoEm: string;
   }[];
+  recentTotal: number;
 };
 
 /**
@@ -213,8 +214,9 @@ export async function getSchoolTurmaDashboard(f: DashboardFilters): Promise<Dash
     taxaAcertos: s.taxaAcertos,
   }));
 
-  // Resultados recentes
-  const recent = rows.slice(0, 15).map((r) => ({
+  // Resultados recentes (paginado: 15 por página)
+  const recentPageSize = 15;
+  const recent = rows.slice(0, recentPageSize).map((r) => ({
     alunoNome: r.alunoNome,
     alunoTurma: r.alunoTurma,
     escolaNome: r.escolaNome,
@@ -236,5 +238,6 @@ export async function getSchoolTurmaDashboard(f: DashboardFilters): Promise<Dash
     hardest,
     perProva,
     recent,
+    recentTotal: rows.length,
   };
 }

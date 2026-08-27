@@ -279,8 +279,17 @@ export default async function SchoolTurmaDashboard({
 
       {/* Resultados recentes */}
       <section className="mt-8">
-        <h2 className="text-lg font-bold text-slate-900">Resultados recentes</h2>
-        <p className="text-sm text-slate-500">Últimos envios do escopo selecionado</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Resultados recentes</h2>
+            <p className="text-sm text-slate-500">Últimos envios do escopo selecionado</p>
+          </div>
+          {data.recentTotal > 15 && (
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <span>Total: {data.recentTotal} resultados</span>
+            </div>
+          )}
+        </div>
         {data.recent.length === 0 ? (
           <p className="mt-4 rounded-xl border border-slate-200 bg-white px-5 py-8 text-center text-sm text-slate-500">
             Nenhum resultado registrado ainda.
@@ -315,6 +324,17 @@ export default async function SchoolTurmaDashboard({
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {data.recentTotal > 15 && (
+          <div className="mt-3 text-center text-sm text-slate-500">
+            Exibindo os 15 mais recentes de {data.recentTotal} resultados.
+            <button
+              className="ml-2 text-indigo-600 hover:underline"
+              onClick={() => window.open("/admin/resultados", "_blank")}
+            >
+              Ver todos
+            </button>
           </div>
         )}
       </section>

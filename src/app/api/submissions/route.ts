@@ -18,6 +18,17 @@ const ANO_LETIVO = 2026;
 
 type AnswerInput = { questaoId: number; alternativaId?: number | null; textoResposta?: string };
 
+type SubmissionInput = {
+  codigo: string;
+  studentName: string;
+  studentClass: string;
+  school: string;
+  alunoId: string;
+  turmaId: string;
+  answers: AnswerInput[];
+  respondidaEm?: string;
+};
+
 function asText(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
@@ -139,6 +150,14 @@ export async function POST(req: Request) {
     if (typeof a.questaoId === "number") byQuestion.set(a.questaoId, a);
   }
 
+  // Parse client timestamp if provided
+  const clientTimestamp = typeof body.respondidaEm === "string" ? body.respondidaEm.trim() : "";
+  const submittedAt = clientTimestamp ? new Date(clientTimestamp) : new Date();
+  if (clientTimestamp && Number.isNaN(submittedAt.getTime())) {
+    // Fallback to server time if client timestamp is invalid
+    submittedAt.setTime(Date.now());
+  }
+
   let acertos = 0;
   let erros = 0;
   let valorCorreto = 0;
@@ -188,6 +207,7 @@ export async function POST(req: Request) {
         erros,
         nota: String(nota),
         percentual: String(percentual),
+        criadoEm: submittedAt,
       })
       .returning({ id: resultados.id });
 
@@ -200,6 +220,7 @@ export async function POST(req: Request) {
         alunoTurma: studentClass,
         escolaNome: school,
         resultadoId: res.id,
+        respondidaEm: submittedAt,
         ...r,
       }))
     );

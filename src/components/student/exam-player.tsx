@@ -387,6 +387,7 @@ export default function ExamPlayer({ code }: { code: string }) {
     setError("");
     setSubmitting(true);
     try {
+      const now = new Date().toISOString();
       const res = await fetch("/api/submissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -397,6 +398,7 @@ export default function ExamPlayer({ code }: { code: string }) {
           school: identify.school,
           alunoId: identify.alunoId,
           turmaId: identify.turmaId,
+          respondidaEm: now,
           answers: questions.map((q) => {
             const a = answers[q.id];
             return {

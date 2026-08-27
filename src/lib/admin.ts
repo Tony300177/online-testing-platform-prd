@@ -121,7 +121,11 @@ export async function fetchOpcoesFiltros() {
     db.select({ sexo: alunos.sexo }).from(alunos).where(sql`${alunos.sexo} is not null`).groupBy(alunos.sexo).orderBy(asc(alunos.sexo)),
     db.select({ bairro: alunos.bairro }).from(alunos).where(sql`${alunos.bairro} is not null`).groupBy(alunos.bairro).orderBy(asc(alunos.bairro)),
     db.select({ nome: escolas.nome }).from(escolas).orderBy(asc(escolas.nome)),
-    db.select({ id: turmas.id, nome: turmas.nome }).from(turmas).orderBy(asc(turmas.nome)),
+    db
+      .select({ id: turmas.id, nome: turmas.nome, escolaNome: escolas.nome })
+      .from(turmas)
+      .innerJoin(escolas, eq(turmas.escolaId, escolas.id))
+      .orderBy(asc(escolas.nome), asc(turmas.nome)),
     db.select({ nome: professores.nome }).from(professores).orderBy(asc(professores.nome)),
   ]);
   return {
@@ -129,7 +133,7 @@ export async function fetchOpcoesFiltros() {
     generos: generos.map((r) => r.sexo).filter(Boolean) as string[],
     bairros: bairros.map((r) => r.bairro).filter(Boolean) as string[],
     escolas: escolasList.map((r) => r.nome),
-    turmas: turmasList.map((r) => r.nome),
+    turmas: turmasList.map((r) => ({ nome: r.nome, escola: r.escolaNome })),
     professores: professoresList.map((r) => r.nome),
   };
 }

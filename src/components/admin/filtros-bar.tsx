@@ -5,9 +5,11 @@ import { Filter, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { AlunoFilters } from "@/lib/admin";
 
+type TurmaOption = { nome: string; escola: string };
+
 type Opcoes = {
   escolas: string[];
-  turmas: string[];
+  turmas: TurmaOption[];
   etnias: string[];
   generos: string[];
   bairros: string[];
@@ -73,7 +75,14 @@ export default function FiltrosBar({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-500">Escola</label>
-          <select value={escola} onChange={(e) => setEscola(e.target.value)} className={inputCls}>
+          <select
+            value={escola}
+            onChange={(e) => {
+              setEscola(e.target.value);
+              setTurma("");
+            }}
+            className={inputCls}
+          >
             <option value="">Todas</option>
             {opcoes.escolas.map((o) => (
               <option key={o} value={o}>
@@ -84,13 +93,21 @@ export default function FiltrosBar({
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-500">Turma</label>
-          <select value={turma} onChange={(e) => setTurma(e.target.value)} className={inputCls}>
+          <select
+            value={turma}
+            onChange={(e) => {
+              setTurma(e.target.value);
+            }}
+            className={inputCls}
+          >
             <option value="">Todas</option>
-            {opcoes.turmas.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
+            {opcoes.turmas
+              .filter((t) => !escola || t.escola === escola)
+              .map((t) => (
+                <option key={t.nome} value={t.nome}>
+                  {t.nome}
+                </option>
+              ))}
           </select>
         </div>
         <div>

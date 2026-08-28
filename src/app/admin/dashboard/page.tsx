@@ -31,6 +31,9 @@ export default async function SchoolTurmaDashboard({
   const sp = await searchParams;
   const escola = typeof sp.escola === "string" ? sp.escola.trim() : "";
   const turma = typeof sp.turma === "string" ? sp.turma.trim() : "";
+  const page = typeof sp.page === "string" ? Math.max(1, parseInt(sp.page, 10)) : 1;
+  const pageSizeParam = typeof sp.pageSize === "string" ? sp.pageSize : "15";
+  const pageSize = pageSizeParam === "all" ? "all" : Math.max(5, Math.min(100, parseInt(pageSizeParam, 10)));
 
   const escolasList = await db
     .select({ id: escolas.id, nome: escolas.nome })
@@ -46,7 +49,7 @@ export default async function SchoolTurmaDashboard({
     : [];
   const turmaValida = turma && turmasList.some((t) => t.nome === turma) ? turma : "";
 
-  const data = await getSchoolTurmaDashboard({ escolaNome: escola || null, turmaNome: turmaValida || null });
+  const data = await getSchoolTurmaDashboard({ escolaNome: escola || null, turmaNome: turmaValida || null, page, pageSize });
 
   const scopeLabel = turmaValida ? `${escola} · ${turmaValida}` : escola ? escola : "Todas as escolas";
   const comparativoLabel = turmaValida
@@ -82,6 +85,15 @@ export default async function SchoolTurmaDashboard({
           <select
             name="escola"
             defaultValue={escola}
+            onChange={(e) => {
+              const form = e.currentTarget.form as HTMLFormElement;
+              const pageInput = document.createElement("input");
+              pageInput.type = "hidden";
+              pageInput.name = "page";
+              pageInput.value = "1";
+              form.appendChild(pageInput);
+              form.submit();
+            }}
             className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
           >
             <option value="">Todas as escolas</option>
@@ -98,6 +110,15 @@ export default async function SchoolTurmaDashboard({
             name="turma"
             defaultValue={turmaValida}
             disabled={!selectedEscola}
+            onChange={(e) => {
+              const form = e.currentTarget.form as HTMLFormElement;
+              const pageInput = document.createElement("input");
+              pageInput.type = "hidden";
+              pageInput.name = "page";
+              pageInput.value = "1";
+              form.appendChild(pageInput);
+              form.submit();
+            }}
             className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
           >
             <option value="">Todas as turmas</option>
@@ -106,6 +127,22 @@ export default async function SchoolTurmaDashboard({
                 {t.nome}
               </option>
             ))}
+          </select>
+        </div>
+        <div className="min-w-[120px]">
+          <label className="mb-1 block text-sm font-medium text-slate-700">Por página</label>
+          <select
+            name="pageSize"
+            defaultValue={pageSize}
+            onChange={(e) => e.currentTarget.form?.submit()}
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+          >
+            <option value="10">10</option>
+            <option value="15">15</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="all">Todos</option>
           </select>
         </div>
         <div className="flex items-center gap-2">
@@ -284,7 +321,7 @@ export default async function SchoolTurmaDashboard({
             <h2 className="text-lg font-bold text-slate-900">Resultados recentes</h2>
             <p className="text-sm text-slate-500">Últimos envios do escopo selecionado</p>
           </div>
-          {data.recentTotal > 15 && (
+          {data.recentTotal > 0 && (
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <span>Total: {data.recentTotal} resultados</span>
             </div>
@@ -295,47 +332,47 @@ export default async function SchoolTurmaDashboard({
             Nenhum resultado registrado ainda.
           </p>
         ) : (
-          <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
-                  <th className="px-4 py-3 font-semibold">Aluno</th>
-                  <th className="px-4 py-3 font-semibold">Turma</th>
-                  <th className="px-4 py-3 font-semibold">Escola</th>
-                  <th className="px-4 py-3 font-semibold">Acertos</th>
-                  <th className="px-4 py-3 font-semibold">Nota</th>
-                  <th className="px-4 py-3 font-semibold">Enviado em</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recent.map((r, i) => (
-                  <tr key={i} className="border-b border-slate-50 transition hover:bg-slate-50/60">
-                    <td className="px-4 py-3 font-medium text-slate-800">{r.alunoNome}</td>
-                    <td className="px-4 py-3 text-slate-600">{r.alunoTurma}</td>
-                    <td className="max-w-[200px] truncate px-4 py-3 text-slate-500">{r.escolaNome}</td>
-                    <td className="px-4 py-3 text-slate-600">{r.nota === 0 ? "—" : `${r.percentual.toLocaleString("pt-BR")}%`}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-bold text-indigo-700">
-                        {formatScore(r.nota)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">{formatDateTime(r.criadoEm)}</td>
+          <>
+            <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
+                    <th className="px-4 py-3 font-semibold">Aluno</th>
+                    <th className="px-4 py-3 font-semibold">Turma</th>
+                    <th className="px-4 py-3 font-semibold">Escola</th>
+                    <th className="px-4 py-3 font-semibold">Acertos</th>
+                    <th className="px-4 py-3 font-semibold">Nota</th>
+                    <th className="px-4 py-3 font-semibold">Enviado em</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {data.recentTotal > 15 && (
-          <div className="mt-3 text-center text-sm text-slate-500">
-            Exibindo os 15 mais recentes de {data.recentTotal} resultados.
-            <button
-              className="ml-2 text-indigo-600 hover:underline"
-              onClick={() => window.open("/admin/resultados", "_blank")}
-            >
-              Ver todos
-            </button>
-          </div>
+                </thead>
+                <tbody>
+                  {data.recent.map((r, i) => (
+                    <tr key={i} className="border-b border-slate-50 transition hover:bg-slate-50/60">
+                      <td className="px-4 py-3 font-medium text-slate-800">{r.alunoNome}</td>
+                      <td className="px-4 py-3 text-slate-600">{r.alunoTurma}</td>
+                      <td className="max-w-[200px] truncate px-4 py-3 text-slate-500">{r.escolaNome}</td>
+                      <td className="px-4 py-3 text-slate-600">{r.nota === 0 ? "—" : `${r.percentual.toLocaleString("pt-BR")}%`}</td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-bold text-indigo-700">
+                          {formatScore(r.nota)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">{formatDateTime(r.criadoEm)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {pageSize !== "all" && data.recentTotal > pageSize && (
+              <Pagination
+                currentPage={page}
+                totalItems={data.recentTotal}
+                itemsPerPage={pageSize}
+                baseUrl="/admin/dashboard"
+                params={{ escola: escola || undefined, turma: turmaValida || undefined, pageSize: String(pageSize) }}
+              />
+            )}
+          </>
         )}
       </section>
     </div>
@@ -390,5 +427,125 @@ function EmptyChart() {
     <div className="flex h-[260px] items-center justify-center rounded-xl border border-dashed border-slate-200 text-sm text-slate-400">
       Sem dados suficientes
     </div>
+  );
+}
+
+function Pagination({
+  currentPage,
+  totalItems,
+  itemsPerPage,
+  baseUrl,
+  params,
+}: {
+  currentPage: number;
+  totalItems: number;
+  itemsPerPage: number;
+  baseUrl: string;
+  params: Record<string, string | undefined>;
+}) {
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  if (totalPages <= 1) return null;
+
+  const createUrl = (page: number) => {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) searchParams.set(key, value);
+    });
+    if (page > 1) searchParams.set("page", String(page));
+    return `${baseUrl}?${searchParams.toString()}`;
+  };
+
+  const pages = [];
+  const maxVisiblePages = 9;
+  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+  let endPage = startPage + maxVisiblePages - 1;
+
+  if (endPage > totalPages) {
+    endPage = totalPages;
+    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+  }
+
+  for (let i = startPage; i <= endPage; i++) {
+    pages.push(i);
+  }
+
+  return (
+    <nav className="mt-4 flex flex-wrap items-center justify-center gap-2" aria-label="Paginação dos resultados">
+      <a
+        href={createUrl(currentPage - 1)}
+        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+          currentPage === 1
+            ? "text-slate-300 cursor-not-allowed"
+            : "text-slate-700 bg-white border border-slate-300 hover:bg-slate-50"
+        }`}
+        aria-disabled={currentPage === 1}
+        aria-label="Página anterior"
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+        Anterior
+      </a>
+      {startPage > 1 && (
+        <>
+          <a href={createUrl(1)} className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">1</a>
+          {startPage > 2 && <span className="inline-flex items-center px-2 text-sm text-slate-400">…</span>}
+        </>
+      )}
+      {pages.map((p) => (
+        <a
+          key={p}
+          href={createUrl(p)}
+          className={`inline-flex items-center justify-center min-w-[2.5rem] rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+            p === currentPage
+              ? "bg-indigo-600 text-white"
+              : "text-slate-700 bg-white border border-slate-300 hover:bg-slate-50"
+          }`}
+          aria-current={p === currentPage ? "page" : undefined}
+        >
+          {p}
+        </a>
+      ))}
+      {endPage < totalPages && (
+        <>
+          {endPage < totalPages - 1 && <span className="inline-flex items-center px-2 text-sm text-slate-400">…</span>}
+          <a href={createUrl(totalPages)} className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">{totalPages}</a>
+        </>
+      )}
+      <a
+        href={createUrl(currentPage + 1)}
+        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+          currentPage === totalPages
+            ? "text-slate-300 cursor-not-allowed"
+            : "text-slate-700 bg-white border border-slate-300 hover:bg-slate-50"
+        }`}
+        aria-disabled={currentPage === totalPages}
+        aria-label="Próxima página"
+      >
+        Próxima
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+      </a>
+      <div className="ml-2 flex items-center gap-1.5">
+        <label htmlFor="page-jump" className="text-xs text-slate-500">Ir para:</label>
+        <input
+          type="number"
+          id="page-jump"
+          min="1"
+          max={totalPages}
+          value={currentPage}
+          onChange={(e) => {
+            const page = Math.min(Math.max(1, parseInt(e.target.value) || 1), totalPages);
+            if (page !== currentPage) window.location.href = createUrl(page);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              const page = Math.min(Math.max(1, parseInt(e.currentTarget.value) || 1), totalPages);
+              if (page !== currentPage) window.location.href = createUrl(page);
+            }
+          }}
+          className="w-16 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-center text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+          aria-label="Pular para página"
+        />
+        <span className="text-xs text-slate-400">de {totalPages}</span>
+      </div>
+    </nav>
   );
 }

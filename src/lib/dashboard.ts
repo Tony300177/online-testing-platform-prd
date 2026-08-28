@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { provas, questoes, respostasAlunos, resultados } from "@/db/schema";
 
-export type DashboardFilters = { escolaNome: string | null; turmaNome: string | null };
+export type DashboardFilters = { escolaNome: string | null; turmaNome: string | null; page?: number; pageSize?: number | "all" };
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -62,7 +62,49 @@ export async function getSchoolTurmaDashboard(f: DashboardFilters): Promise<Dash
     f.turmaNome ? eq(resultados.alunoTurma, f.turmaNome) : undefined
   );
 
+  const page = f.page ?? 1;
+  const pageSize = f.pageSize ?? 15;
+  const isAll = pageSize === "all";
+  const limit = isAll ? undefined : pageSize;
+  const offset = isAll ? undefined : (page - 1) * pageSize;
+
+  const totalRows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(resultados)
+    .where(where);
+  const recentTotal = Number(totalRows[0]?.count ?? 0);
+
   const rows = await db
+    .select({
+      provaId: resultados.provaId,
+      alunoNome: resultados.alunoNome,
+      alunoTurma: resultados.alunoTurma,
+      escolaNome: resultados.escolaNome,
+      nota: resultados.nota,
+      percentual: resultados.percentual,
+      acertos: resultados.acertos,
+      erros: resultados.erros,
+      criadoEm: resultados.criadoEm,
+    })
+    .from(resultados)
+    .where(where)
+    .orderBy(desc(resultados.criadoEm))
+    .limit(limit ?? 1000000)
+    .offset(offset ?? 0);
+
+  const provaIds = Array.from(new Set(rows.map((r) => r.provaId)));
+  const provasMeta = provaIds.length
+    ? await db
+        .select({ id: provas.id, titulo: provas.titulo, createdAt: provas.createdAt, dataFim: provas.dataFim })
+        .from(provas)
+        .where(inArray(provas.id, provaIds))
+    : [];
+  const metaById = new Map(provasMeta.map((p) => [p.id, p]));
+  const metaDate = (p: { id: number; titulo: string; createdAt: Date; dataFim: Date | null }) =>
+    p.dataFim?.toISOString() ?? p.createdAt.toISOString();
+
+  // Fetch all rows for metrics calculation (without pagination)
+  const allRows = await db
     .select({
       provaId: resultados.provaId,
       alunoNome: resultados.alunoNome,
@@ -78,29 +120,18 @@ export async function getSchoolTurmaDashboard(f: DashboardFilters): Promise<Dash
     .where(where)
     .orderBy(desc(resultados.criadoEm));
 
-  const provaIds = Array.from(new Set(rows.map((r) => r.provaId)));
-  const provasMeta = provaIds.length
-    ? await db
-        .select({ id: provas.id, titulo: provas.titulo, createdAt: provas.createdAt, dataFim: provas.dataFim })
-        .from(provas)
-        .where(inArray(provas.id, provaIds))
-    : [];
-  const metaById = new Map(provasMeta.map((p) => [p.id, p]));
-  const metaDate = (p: { id: number; titulo: string; createdAt: Date; dataFim: Date | null }) =>
-    p.dataFim?.toISOString() ?? p.createdAt.toISOString();
-
   const distinctAlunos = new Set(
-    rows.map((r) => `${r.escolaNome}::${r.alunoTurma}::${r.alunoNome}`)
+    allRows.map((r) => `${r.escolaNome}::${r.alunoTurma}::${r.alunoNome}`)
   ).size;
 
-  const total = rows.length;
-  const sumPct = rows.reduce((s, r) => s + Number(r.percentual), 0);
-  const sumAcertos = rows.reduce((s, r) => s + Number(r.acertos), 0);
-  const sumErros = rows.reduce((s, r) => s + Number(r.erros), 0);
+  const total = allRows.length;
+  const sumPct = allRows.reduce((s, r) => s + Number(r.percentual), 0);
+  const sumAcertos = allRows.reduce((s, r) => s + Number(r.acertos), 0);
+  const sumErros = allRows.reduce((s, r) => s + Number(r.erros), 0);
 
   // Linha progressiva: média percentual por prova, ordenada por data
   const byProva = new Map<number, { sum: number; n: number; acertos: number; erros: number }>();
-  for (const r of rows) {
+  for (const r of allRows) {
     const e = byProva.get(r.provaId) ?? { sum: 0, n: 0, acertos: 0, erros: 0 };
     e.sum += Number(r.percentual);
     e.n += 1;
@@ -132,11 +163,11 @@ export async function getSchoolTurmaDashboard(f: DashboardFilters): Promise<Dash
   ];
   const distribution = buckets.map((b) => ({
     faixa: b.label,
-    alunos: rows.filter((r) => Number(r.nota) >= b.min && Number(r.nota) <= b.max).length,
+    alunos: allRows.filter((r) => Number(r.nota) >= b.min && Number(r.nota) <= b.max).length,
   }));
 
   // Comparativo: por escola (sem filtro) | por turma (escola selecionada) | por prova (turma selecionada)
-  const comparisonRows = rows.map((r) => {
+  const comparisonRows = allRows.map((r) => {
     if (f.turmaNome) {
       const meta = metaById.get(r.provaId);
       return { name: meta?.titulo ?? `Prova #${r.provaId}`, nota: Number(r.nota) };
@@ -214,9 +245,8 @@ export async function getSchoolTurmaDashboard(f: DashboardFilters): Promise<Dash
     taxaAcertos: s.taxaAcertos,
   }));
 
-  // Resultados recentes (paginado: 15 por página)
-  const recentPageSize = 15;
-  const recent = rows.slice(0, recentPageSize).map((r) => ({
+  // Resultados recentes (paginados)
+  const recent = rows.map((r) => ({
     alunoNome: r.alunoNome,
     alunoTurma: r.alunoTurma,
     escolaNome: r.escolaNome,
@@ -238,6 +268,6 @@ export async function getSchoolTurmaDashboard(f: DashboardFilters): Promise<Dash
     hardest,
     perProva,
     recent,
-    recentTotal: rows.length,
+    recentTotal,
   };
 }

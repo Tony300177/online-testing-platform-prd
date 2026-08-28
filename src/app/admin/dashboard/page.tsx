@@ -20,6 +20,7 @@ import { db } from "@/db";
 import { escolas, turmas } from "@/db/schema";
 import { getSchoolTurmaDashboard } from "@/lib/dashboard";
 import { formatDateTime, formatScore } from "@/lib/utils";
+import DashboardFilters from "@/components/admin/dashboard-filters";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,8 @@ export default async function SchoolTurmaDashboard({
   const turma = typeof sp.turma === "string" ? sp.turma.trim() : "";
   const page = typeof sp.page === "string" ? Math.max(1, parseInt(sp.page, 10)) : 1;
   const pageSizeParam = typeof sp.pageSize === "string" ? sp.pageSize : "15";
-  const pageSize = pageSizeParam === "all" ? "all" : Math.max(5, Math.min(100, parseInt(pageSizeParam, 10)));
+  const pageSizeValue = pageSizeParam === "all" ? "all" : Math.max(5, Math.min(100, parseInt(pageSizeParam, 10)));
+  const pageSize = String(pageSizeValue);
 
   const escolasList = await db
     .select({ id: escolas.id, nome: escolas.nome })
@@ -49,7 +51,7 @@ export default async function SchoolTurmaDashboard({
     : [];
   const turmaValida = turma && turmasList.some((t) => t.nome === turma) ? turma : "";
 
-  const data = await getSchoolTurmaDashboard({ escolaNome: escola || null, turmaNome: turmaValida || null, page, pageSize });
+  const data = await getSchoolTurmaDashboard({ escolaNome: escola || null, turmaNome: turmaValida || null, page, pageSize: pageSizeValue });
 
   const scopeLabel = turmaValida ? `${escola} · ${turmaValida}` : escola ? escola : "Todas as escolas";
   const comparativoLabel = turmaValida
@@ -75,93 +77,15 @@ export default async function SchoolTurmaDashboard({
       </div>
 
       {/* Filtros */}
-      <form
-        method="get"
-        action="/admin/dashboard"
-        className="mt-6 flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-      >
-        <div className="min-w-[220px] flex-1">
-          <label className="mb-1 block text-sm font-medium text-slate-700">Escola</label>
-          <select
-            name="escola"
-            defaultValue={escola}
-            onChange={(e) => {
-              const form = e.currentTarget.form as HTMLFormElement;
-              const pageInput = document.createElement("input");
-              pageInput.type = "hidden";
-              pageInput.name = "page";
-              pageInput.value = "1";
-              form.appendChild(pageInput);
-              form.submit();
-            }}
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-          >
-            <option value="">Todas as escolas</option>
-            {escolasList.map((e) => (
-              <option key={e.id} value={e.nome}>
-                {e.nome}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="min-w-[200px] flex-1">
-          <label className="mb-1 block text-sm font-medium text-slate-700">Turma</label>
-          <select
-            name="turma"
-            defaultValue={turmaValida}
-            disabled={!selectedEscola}
-            onChange={(e) => {
-              const form = e.currentTarget.form as HTMLFormElement;
-              const pageInput = document.createElement("input");
-              pageInput.type = "hidden";
-              pageInput.name = "page";
-              pageInput.value = "1";
-              form.appendChild(pageInput);
-              form.submit();
-            }}
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-          >
-            <option value="">Todas as turmas</option>
-            {turmasList.map((t) => (
-              <option key={t.id} value={t.nome}>
-                {t.nome}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="min-w-[120px]">
-          <label className="mb-1 block text-sm font-medium text-slate-700">Por página</label>
-          <select
-            name="pageSize"
-            defaultValue={pageSize}
-            onChange={(e) => e.currentTarget.form?.submit()}
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-          >
-            <option value="10">10</option>
-            <option value="15">15</option>
-            <option value="25">25</option>
-            <option value="50">50</option>
-            <option value="100">100</option>
-            <option value="all">Todos</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="submit"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500"
-          >
-            <Filter className="h-4 w-4" /> Aplicar
-          </button>
-          {(escola || turmaValida) && (
-            <Link
-              href="/admin/dashboard"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-            >
-              <X className="h-4 w-4" /> Limpar
-            </Link>
-          )}
-        </div>
-      </form>
+      <DashboardFilters
+        escolasList={escolasList}
+        turmasList={turmasList}
+        selectedEscola={selectedEscola}
+        turmaValida={turmaValida}
+        escola={escola}
+        turma={turma}
+        pageSize={pageSize}
+      />
 
       {/* Métricas */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -363,13 +287,13 @@ export default async function SchoolTurmaDashboard({
                 </tbody>
               </table>
             </div>
-            {pageSize !== "all" && data.recentTotal > pageSize && (
+            {pageSizeValue !== "all" && data.recentTotal > Number(pageSize) && (
               <Pagination
                 currentPage={page}
                 totalItems={data.recentTotal}
-                itemsPerPage={pageSize}
+                itemsPerPage={Number(pageSize)}
                 baseUrl="/admin/dashboard"
-                params={{ escola: escola || undefined, turma: turmaValida || undefined, pageSize: String(pageSize) }}
+                params={{ escola: escola || undefined, turma: turmaValida || undefined, pageSize }}
               />
             )}
           </>

@@ -1,8 +1,8 @@
 import { requireUser } from "@/lib/auth";
 import { db } from "@/db";
-import { respostasAlunos, questoes, provas } from "@/db/schema";
+import { respostasAlunos, questoes, provas, escolas, turmas, alunos, professores } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { Target, Download, School, Users, UserCheck, Settings, BarChart3 } from "lucide-react";
+import { Target, Download, School, Users, UserCheck, Settings, BarChart3, Filter } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -15,13 +15,34 @@ export default async function AdminHabilidadesPage({
   await requireUser(["admin"]);
   const sp = await searchParams;
   const provaId = typeof sp.provaId === "string" ? sp.provaId : "";
+  const escolaId = typeof sp.escolaId === "string" ? sp.escolaId : "";
+  const turmaId = typeof sp.turmaId === "string" ? sp.turmaId : "";
+  const etnia = typeof sp.etnia === "string" ? sp.etnia : "";
+  const sexo = typeof sp.sexo === "string" ? sp.sexo : "";
+  const bairro = typeof sp.bairro === "string" ? sp.bairro : "";
+  const professorId = typeof sp.professorId === "string" ? sp.professorId : "";
+  const alunoNome = typeof sp.alunoNome === "string" ? sp.alunoNome : "";
 
-  const provasRows = await db.select({ id: provas.id, titulo: provas.titulo }).from(provas).orderBy(provas.id);
+  // Buscar opções dos filtros
+  const [provasRows, escolasList, turmasList, etniasList, sexosList, bairrosList, professoresList] = await Promise.all([
+    db.select({ id: provas.id, titulo: provas.titulo }).from(provas).orderBy(provas.id),
+    db.select({ id: escolas.id, nome: escolas.nome }).from(escolas).orderBy(escolas.nome),
+    db.select({ id: turmas.id, nome: turmas.nome }).from(turmas).where(escolaId ? eq(turmas.escolaId, escolaId) : sql`1=1`).orderBy(turmas.nome),
+    db.selectDistinct({ etnia: alunos.etnia }).from(alunos).where(sql`${alunos.etnia} IS NOT NULL`).orderBy(alunos.etnia),
+    db.selectDistinct({ sexo: alunos.sexo }).from(alunos).where(sql`${alunos.sexo} IS NOT NULL`).orderBy(alunos.sexo),
+    db.selectDistinct({ bairro: alunos.bairro }).from(alunos).where(sql`${alunos.bairro} IS NOT NULL`).orderBy(alunos.bairro),
+    db.select({ id: professores.id, nome: professores.nome }).from(professores).orderBy(professores.nome),
+  ]);
 
   const conditions = [sql`q.habilidade IS NOT NULL AND cardinality(q.habilidade) > 0`];
-  if (provaId) {
-    conditions.push(eq(respostasAlunos.provaId, Number(provaId)));
-  }
+  if (provaId) conditions.push(eq(respostasAlunos.provaId, Number(provaId)));
+  if (escolaId) conditions.push(eq(respostasAlunos.escolaNome, (await db.select({ nome: escolas.nome }).from(escolas).where(eq(escolas.id, escolaId)).limit(1))[0]?.nome ?? ""));
+  if (turmaId) conditions.push(eq(respostasAlunos.alunoTurma, (await db.select({ nome: turmas.nome }).from(turmas).where(eq(turmas.id, turmaId)).limit(1))[0]?.nome ?? ""));
+  if (etnia) conditions.push(sql`a.etnia = ${etnia}`);
+  if (sexo) conditions.push(sql`a.sexo = ${sexo}`);
+  if (bairro) conditions.push(sql`a.bairro = ${bairro}`);
+  if (professorId) conditions.push(sql`t.professor_id = ${professorId}`);
+  if (alunoNome) conditions.push(sql`a.nome ILIKE ${'%' + alunoNome + '%'}`);
 
   const { rows } = await db.execute(sql`
     SELECT
@@ -34,6 +55,8 @@ export default async function AdminHabilidadesPage({
     FROM respostas_alunos ra
     INNER JOIN questoes q ON q.id = ra.questao_id
     INNER JOIN provas p ON p.id = ra.prova_id
+    LEFT JOIN alunos a ON a.id = ra.aluno_id
+    LEFT JOIN turmas t ON t.id = ra.turma_id
     WHERE ${sql.join(conditions, sql` AND `)}
     ORDER BY ra.aluno_turma, ra.aluno_nome, p.disciplina
   `);
@@ -74,6 +97,83 @@ export default async function AdminHabilidadesPage({
 
   return (
     <div>
+      {/* Filtros */}
+      <form method="get" className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Escola</label>
+          <select name="escolaId" defaultValue={escolaId} onChange={(e) => { const form = e.currentTarget.form; if (form) form.submit(); }} className="max-w-[200px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <option value="">Todas as escolas</option>
+            {escolasList.map((e) => (
+              <option key={e.id} value={e.id}>{e.nome}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Turma</label>
+          <select name="turmaId" defaultValue={turmaId} onChange={(e) => { const form = e.currentTarget.form; if (form) form.submit(); }} className="max-w-[180px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <option value="">Todas as turmas</option>
+            {turmasList.map((t) => (
+              <option key={t.id} value={t.id}>{t.nome}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Avaliação</label>
+          <select name="provaId" defaultValue={provaId} className="max-w-[220px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <option value="">Todas as avaliações</option>
+            {provasRows.map((p) => (
+              <option key={p.id} value={p.id}>{p.titulo}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Etnia</label>
+          <select name="etnia" defaultValue={etnia} className="max-w-[150px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <option value="">Todas</option>
+            {etniasList.map((e: { etnia: string | null }) => e.etnia && (
+              <option key={e.etnia} value={e.etnia}>{e.etnia}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Gênero</label>
+          <select name="sexo" defaultValue={sexo} className="max-w-[130px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <option value="">Todos</option>
+            {sexosList.map((s: { sexo: string | null }) => s.sexo && (
+              <option key={s.sexo} value={s.sexo}>{s.sexo}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Bairro</label>
+          <select name="bairro" defaultValue={bairro} className="max-w-[150px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <option value="">Todos</option>
+            {bairrosList.map((b: { bairro: string | null }) => b.bairro && (
+              <option key={b.bairro} value={b.bairro}>{b.bairro}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Professor</label>
+          <select name="professorId" defaultValue={professorId} className="max-w-[180px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <option value="">Todos</option>
+            {professoresList.map((p) => (
+              <option key={p.id} value={p.id}>{p.nome}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Buscar por nome</label>
+          <input type="text" name="alunoNome" defaultValue={alunoNome} placeholder="Nome do aluno..." className="max-w-[200px] rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+        </div>
+        <button type="submit" className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700">
+          Filtrar
+        </button>
+        <a href="/admin/habilidades" className="px-2 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700">
+          Limpar
+        </a>
+      </form>
+
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-800">
@@ -83,15 +183,6 @@ export default async function AdminHabilidadesPage({
           <p className="mt-1 text-sm text-slate-500">Desempenho dos alunos por habilidade avaliada.</p>
         </div>
         <div className="flex gap-2">
-          <form method="get" className="flex items-center gap-2">
-            <select name="provaId" defaultValue={provaId} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
-              <option value="">Todas as provas</option>
-              {provasRows.map((p) => (
-                <option key={p.id} value={p.id}>{p.titulo}</option>
-              ))}
-            </select>
-            <button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Filtrar</button>
-          </form>
           {data.length > 0 && (
             <a href={csvHref} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
               <Download className="h-4 w-4" />

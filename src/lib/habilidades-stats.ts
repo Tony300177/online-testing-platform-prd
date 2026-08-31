@@ -76,6 +76,16 @@ export type GeneroBreakdown = {
   classificacao: Classificacao;
 };
 
+export type EtniaBreakdown = {
+  etnia: string;
+  total: number;
+  acertos: number;
+  erros: number;
+  naoRespondeu: number;
+  pctAcerto: number | null;
+  classificacao: Classificacao;
+};
+
 export type HabilidadeAgg = {
   habilidade: string;
   disciplinas: string[];
@@ -109,6 +119,8 @@ export type HabilidadeAnalise = {
   alunosPorHabilidade: Record<string, AlunoBreakdown[]>;
   porGenero: Record<string, GeneroBreakdown[]>;
   porGeneroGlobal: GeneroBreakdown[];
+  porEtnia: Record<string, EtniaBreakdown[]>;
+  porEtniaGlobal: EtniaBreakdown[];
   thresholds: { verdeMin: number; amareloMin: number };
 };
 
@@ -123,6 +135,7 @@ type RawRow = {
   alunoNome: string;
   alunoTurma: string;
   sexo: string | null;
+  etnia: string | null;
   resultado: ResultadoTipo;
 };
 
@@ -149,6 +162,8 @@ function emptyAnalise(thresholds: { verdeMin: number; amareloMin: number }): Hab
     alunosPorHabilidade: {},
     porGenero: {},
     porGeneroGlobal: [],
+    porEtnia: {},
+    porEtniaGlobal: [],
     thresholds,
   };
 }
@@ -198,6 +213,7 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
       ra.aluno_nome AS "alunoNome",
       ra.aluno_turma AS "alunoTurma",
       a.sexo AS "sexo",
+      a.etnia AS "etnia",
       CASE
         WHEN ra.correta THEN 'acerto'
         WHEN ra.alternativa_id IS NULL AND COALESCE(ra.texto_resposta, '') = '' THEN 'nao_respondeu'
@@ -217,11 +233,13 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
 
   /* ---------- Agregação por habilidade ---------- */
   type GeneroAcc = { total: number; acertos: number; erros: number; naoRespondeu: number };
+  type EtniaAcc = { total: number; acertos: number; erros: number; naoRespondeu: number };
   type Acc = {
     disciplinas: Set<string>;
     questoes: Map<number, QuestaoBreakdown>;
     alunos: Map<string, AlunoBreakdown & { key: string }>;
     generos: Map<string, GeneroAcc>;
+    etnias: Map<string, EtniaAcc>;
     total: number;
     acertos: number;
     erros: number;
@@ -235,7 +253,7 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
   for (const r of data) {
     let acc = byHab.get(r.habilidade);
     if (!acc) {
-      acc = { disciplinas: new Set(), questoes: new Map(), alunos: new Map(), generos: new Map(), total: 0, acertos: 0, erros: 0, naoRespondeu: 0 };
+      acc = { disciplinas: new Set(), questoes: new Map(), alunos: new Map(), generos: new Map(), etnias: new Map(), total: 0, acertos: 0, erros: 0, naoRespondeu: 0 };
       byHab.set(r.habilidade, acc);
     }
     acc.disciplinas.add(r.disciplina);
@@ -247,6 +265,26 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
     // Por gênero
     const sexo = r.sexo ?? "Não informado";
     let gacc = acc.generos.get(sexo);
+    if (!gacc) {
+      gacc = { total: 0, acertos: 0, erros: 0, naoRespondeu: 0 };
+      acc.generos.set(sexo, gacc);
+    }
+    gacc.total++;
+    if (r.resultado === "acerto") gacc.acertos++;
+    else if (r.resultado === "erro") gacc.erros++;
+    else gacc.naoRespondeu++;
+
+    // Por etnia
+    const etnia = r.etnia ?? "Não informado";
+    let eacc = acc.etnias.get(etnia);
+    if (!eacc) {
+      eacc = { total: 0, acertos: 0, erros: 0, naoRespondeu: 0 };
+      acc.etnias.set(etnia, eacc);
+    }
+    eacc.total++;
+    if (r.resultado === "acerto") eacc.acertos++;
+    else if (r.resultado === "erro") eacc.erros++;
+    else eacc.naoRespondeu++;
     if (!gacc) {
       gacc = { total: 0, acertos: 0, erros: 0, naoRespondeu: 0 };
       acc.generos.set(sexo, gacc);
@@ -352,8 +390,20 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
       classificacao: classificar(g.total > 0 ? round1((g.acertos / g.total) * 100) : null, thresholds),
     }));
     generos.sort((a, b) => b.total - a.total);
-    // Store in a separate map
     (acc as any).generosFinal = generos;
+
+    // Por etnia
+    const etnias = [...acc.etnias.entries()].map(([etnia, e]) => ({
+      etnia,
+      total: e.total,
+      acertos: e.acertos,
+      erros: e.erros,
+      naoRespondeu: e.naoRespondeu,
+      pctAcerto: e.total > 0 ? round1((e.acertos / e.total) * 100) : null,
+      classificacao: classificar(e.total > 0 ? round1((e.acertos / e.total) * 100) : null, thresholds),
+    }));
+    etnias.sort((a, b) => b.total - a.total);
+    (acc as any).etniasFinal = etnias;
   }
 
   // Resumo geral (cards)
@@ -408,7 +458,38 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
     porGenero[hab] = (acc as any).generosFinal;
   }
 
-  return { resumo, habilidades, questoesPorHabilidade, alunosPorHabilidade, porGenero, porGeneroGlobal, thresholds };
+  // Por etnia (geral)
+  const etniaGlobal = new Map<string, { total: number; acertos: number; erros: number; naoRespondeu: number }>();
+  for (const [hab, acc] of byHab.entries()) {
+    for (const [etnia, e] of acc.etnias.entries()) {
+      let ee = etniaGlobal.get(etnia);
+      if (!ee) {
+        ee = { total: 0, acertos: 0, erros: 0, naoRespondeu: 0 };
+        etniaGlobal.set(etnia, ee);
+      }
+      ee.total += e.total;
+      ee.acertos += e.acertos;
+      ee.erros += e.erros;
+      ee.naoRespondeu += e.naoRespondeu;
+    }
+  }
+  const porEtniaGlobal: EtniaBreakdown[] = [...etniaGlobal.entries()].map(([etnia, e]) => ({
+    etnia,
+    total: e.total,
+    acertos: e.acertos,
+    erros: e.erros,
+    naoRespondeu: e.naoRespondeu,
+    pctAcerto: e.total > 0 ? round1((e.acertos / e.total) * 100) : null,
+    classificacao: classificar(e.total > 0 ? round1((e.acertos / e.total) * 100) : null, thresholds),
+  }));
+  porEtniaGlobal.sort((a, b) => b.total - a.total);
+
+  const porEtnia: Record<string, EtniaBreakdown[]> = {};
+  for (const [hab, acc] of byHab.entries()) {
+    porEtnia[hab] = (acc as any).etniasFinal;
+  }
+
+  return { resumo, habilidades, questoesPorHabilidade, alunosPorHabilidade, porGenero, porGeneroGlobal, porEtnia, porEtniaGlobal, thresholds };
 }
 
 /** Opções para os filtros da tela de análise. */

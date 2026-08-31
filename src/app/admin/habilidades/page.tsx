@@ -1,3 +1,5 @@
+"use client";
+
 import { requireUser } from "@/lib/auth";
 import { db } from "@/db";
 import { respostasAlunos, questoes, provas, escolas, turmas, alunos, professores } from "@/db/schema";

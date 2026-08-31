@@ -88,7 +88,7 @@ export async function getSchoolTurmaDashboard(f: DashboardFilters): Promise<Dash
     })
     .from(resultados)
     .where(where)
-    .orderBy(desc(resultados.criadoEm))
+    .orderBy(desc(resultados.nota))
     .limit(limit ?? 1000000)
     .offset(offset ?? 0);
 

@@ -34,10 +34,22 @@ export default async function AdminHabilidadesPage({
     db.select({ id: professores.id, nome: professores.nome }).from(professores).orderBy(professores.nome),
   ]);
 
+  // Resolver nomes de escola e turma antes de construir conditions
+  let escolaNome = "";
+  if (escolaId) {
+    const [esc] = await db.select({ nome: escolas.nome }).from(escolas).where(eq(escolas.id, escolaId)).limit(1);
+    escolaNome = esc?.nome ?? "";
+  }
+  let turmaNome = "";
+  if (turmaId) {
+    const [tur] = await db.select({ nome: turmas.nome }).from(turmas).where(eq(turmas.id, turmaId)).limit(1);
+    turmaNome = tur?.nome ?? "";
+  }
+
   const conditions = [sql`q.habilidade IS NOT NULL AND cardinality(q.habilidade) > 0`];
   if (provaId) conditions.push(eq(respostasAlunos.provaId, Number(provaId)));
-  if (escolaId) conditions.push(eq(respostasAlunos.escolaNome, (await db.select({ nome: escolas.nome }).from(escolas).where(eq(escolas.id, escolaId)).limit(1))[0]?.nome ?? ""));
-  if (turmaId) conditions.push(eq(respostasAlunos.alunoTurma, (await db.select({ nome: turmas.nome }).from(turmas).where(eq(turmas.id, turmaId)).limit(1))[0]?.nome ?? ""));
+  if (escolaNome) conditions.push(eq(respostasAlunos.escolaNome, escolaNome));
+  if (turmaNome) conditions.push(eq(respostasAlunos.alunoTurma, turmaNome));
   if (etnia) conditions.push(sql`a.etnia = ${etnia}`);
   if (sexo) conditions.push(sql`a.sexo = ${sexo}`);
   if (bairro) conditions.push(sql`a.bairro = ${bairro}`);

@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -14,17 +12,31 @@ import {
   Target,
   TrendingDown,
   TrendingUp,
+  Users,
 } from "lucide-react";
-import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
+} from "recharts";
 import {
   CLASSIFICACAO_COR,
   CLASSIFICACAO_LABEL,
   type Classificacao,
 } from "@/lib/habilidades-shared";
-import type { AlunoBreakdown, HabilidadeAgg, HabilidadeAnalise } from "@/lib/habilidades-stats";
+import type { AlunoBreakdown, HabilidadeAgg, HabilidadeAnalise, GeneroBreakdown } from "@/lib/habilidades-stats";
 import { buildCsv } from "@/lib/utils";
 
 const PIE_COLORS = { acertos: "#10b981", erros: "#f43f5e", naoRespondeu: "#94a3b8" };
+const GENERO_COLORS: Record<string, string> = { Masculino: "#3b82f6", Feminino: "#ec4899", "Não informado": "#94a3b8" };
 
 function pct(v: number | null): string {
   return v === null ? "—" : `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
@@ -96,6 +108,44 @@ function PieDesempenho({ acertos, erros, naoRespondeu }: { acertos: number; erro
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
       </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
+function BarGenero({ porGeneroGlobal }: { porGeneroGlobal: GeneroBreakdown[] }) {
+  if (!porGeneroGlobal || porGeneroGlobal.length === 0) {
+    return <p className="py-8 text-center text-sm text-slate-400">Sem dados de gênero.</p>;
+  }
+  const data = porGeneroGlobal.map((g) => ({
+    sexo: g.sexo,
+    acertos: g.acertos,
+    erros: g.erros,
+    naoRespondeu: g.naoRespondeu,
+    pctAcerto: g.pctAcerto ?? 0,
+    total: g.total,
+  }));
+  const dataMap = new Map(data.map((d) => [d.sexo, d]));
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={data} layout="vertical">
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+        <XAxis type="number" tickFormatter={(v) => `${v}%`} domain={[0, 100]} />
+        <YAxis type="category" dataKey="sexo" width={80} tick={{ fontSize: 12 }} />
+        <Tooltip
+          formatter={(value: any, name: any) => {
+            const item = dataMap.get(name);
+            if (!item) return [String(value), String(name)];
+            const label = name === "acertos" ? "Acertos" : name === "erros" ? "Erros" : "Não respondeu";
+            const val = item[name as keyof typeof item];
+            return [`${val ?? 0} (${item.pctAcerto?.toFixed(1) ?? 0}%)`, label];
+          }}
+          contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 13 }}
+        />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Bar dataKey="acertos" name="Acertos" stackId="a" fill="#10b981" radius={[0, 4, 4, 0]} />
+        <Bar dataKey="erros" name="Erros" stackId="a" fill="#f43f5e" radius={[0, 4, 4, 0]} />
+        <Bar dataKey="naoRespondeu" name="Não respondeu" stackId="a" fill="#94a3b8" radius={[0, 4, 4, 0]} />
+      </BarChart>
     </ResponsiveContainer>
   );
 }
@@ -218,8 +268,20 @@ export default function HabilidadesAnaliseView({
           Nenhuma resposta encontrada para os filtros selecionados.
         </p>
       ) : (
-        <>
-          {/* Análise geral da turma */}
+<>
+           {/* Gráfico por Gênero */}
+           <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+             <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
+               <Users className="h-5 w-5 text-violet-600" />
+               Desempenho por Gênero
+             </h2>
+             <p className="mt-1 text-sm text-slate-500">Distribuição de acertos, erros e não respondidos por gênero.</p>
+             <div className="mt-4">
+               <BarGenero porGeneroGlobal={data.porGeneroGlobal} />
+             </div>
+           </div>
+
+           {/* Análise geral da turma */}
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {Object.entries(porDisciplina).map(([disciplina, habs]) => {
               const ordenadasDisc = [...habs].filter((h) => h.pctAcerto !== null).sort((a, b) => (b.pctAcerto ?? 0) - (a.pctAcerto ?? 0));

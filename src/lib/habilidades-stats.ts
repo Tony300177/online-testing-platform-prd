@@ -66,6 +66,16 @@ export type AlunoBreakdown = {
   classificacao: Classificacao;
 };
 
+export type GeneroBreakdown = {
+  sexo: string;
+  total: number;
+  acertos: number;
+  erros: number;
+  naoRespondeu: number;
+  pctAcerto: number | null;
+  classificacao: Classificacao;
+};
+
 export type HabilidadeAgg = {
   habilidade: string;
   disciplinas: string[];
@@ -97,6 +107,8 @@ export type HabilidadeAnalise = {
   habilidades: HabilidadeAgg[];
   questoesPorHabilidade: Record<string, QuestaoBreakdown[]>;
   alunosPorHabilidade: Record<string, AlunoBreakdown[]>;
+  porGenero: Record<string, GeneroBreakdown[]>;
+  porGeneroGlobal: GeneroBreakdown[];
   thresholds: { verdeMin: number; amareloMin: number };
 };
 
@@ -110,6 +122,7 @@ type RawRow = {
   alunoId: string | null;
   alunoNome: string;
   alunoTurma: string;
+  sexo: string | null;
   resultado: ResultadoTipo;
 };
 
@@ -134,6 +147,8 @@ function emptyAnalise(thresholds: { verdeMin: number; amareloMin: number }): Hab
     habilidades: [],
     questoesPorHabilidade: {},
     alunosPorHabilidade: {},
+    porGenero: {},
+    porGeneroGlobal: [],
     thresholds,
   };
 }
@@ -182,6 +197,7 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
       ra.aluno_id::text AS "alunoId",
       ra.aluno_nome AS "alunoNome",
       ra.aluno_turma AS "alunoTurma",
+      a.sexo AS "sexo",
       CASE
         WHEN ra.correta THEN 'acerto'
         WHEN ra.alternativa_id IS NULL AND COALESCE(ra.texto_resposta, '') = '' THEN 'nao_respondeu'
@@ -200,10 +216,12 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
   const thresholds = await getThresholds();
 
   /* ---------- Agregação por habilidade ---------- */
+  type GeneroAcc = { total: number; acertos: number; erros: number; naoRespondeu: number };
   type Acc = {
     disciplinas: Set<string>;
     questoes: Map<number, QuestaoBreakdown>;
     alunos: Map<string, AlunoBreakdown & { key: string }>;
+    generos: Map<string, GeneroAcc>;
     total: number;
     acertos: number;
     erros: number;
@@ -217,7 +235,7 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
   for (const r of data) {
     let acc = byHab.get(r.habilidade);
     if (!acc) {
-      acc = { disciplinas: new Set(), questoes: new Map(), alunos: new Map(), total: 0, acertos: 0, erros: 0, naoRespondeu: 0 };
+      acc = { disciplinas: new Set(), questoes: new Map(), alunos: new Map(), generos: new Map(), total: 0, acertos: 0, erros: 0, naoRespondeu: 0 };
       byHab.set(r.habilidade, acc);
     }
     acc.disciplinas.add(r.disciplina);
@@ -225,6 +243,18 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
     if (r.resultado === "acerto") acc.acertos++;
     else if (r.resultado === "erro") acc.erros++;
     else acc.naoRespondeu++;
+
+    // Por gênero
+    const sexo = r.sexo ?? "Não informado";
+    let gacc = acc.generos.get(sexo);
+    if (!gacc) {
+      gacc = { total: 0, acertos: 0, erros: 0, naoRespondeu: 0 };
+      acc.generos.set(sexo, gacc);
+    }
+    gacc.total++;
+    if (r.resultado === "acerto") gacc.acertos++;
+    else if (r.resultado === "erro") gacc.erros++;
+    else gacc.naoRespondeu++;
 
     // Por questão
     let qacc = acc.questoes.get(r.questaoId);
@@ -310,6 +340,20 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
     });
     als.sort((a, b) => (b.aproveitamento ?? 0) - (a.aproveitamento ?? 0) || a.alunoNome.localeCompare(b.alunoNome));
     alunosPorHabilidade[hab] = als;
+
+    // Por gênero
+    const generos = [...acc.generos.entries()].map(([sexo, g]) => ({
+      sexo,
+      total: g.total,
+      acertos: g.acertos,
+      erros: g.erros,
+      naoRespondeu: g.naoRespondeu,
+      pctAcerto: g.total > 0 ? round1((g.acertos / g.total) * 100) : null,
+      classificacao: classificar(g.total > 0 ? round1((g.acertos / g.total) * 100) : null, thresholds),
+    }));
+    generos.sort((a, b) => b.total - a.total);
+    // Store in a separate map
+    (acc as any).generosFinal = generos;
   }
 
   // Resumo geral (cards)
@@ -333,7 +377,38 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
       : null,
   };
 
-  return { resumo, habilidades, questoesPorHabilidade, alunosPorHabilidade, thresholds };
+  // Por gênero (geral)
+  const generoGlobal = new Map<string, { total: number; acertos: number; erros: number; naoRespondeu: number }>();
+  for (const [hab, acc] of byHab.entries()) {
+    for (const [sexo, g] of acc.generos.entries()) {
+      let gg = generoGlobal.get(sexo);
+      if (!gg) {
+        gg = { total: 0, acertos: 0, erros: 0, naoRespondeu: 0 };
+        generoGlobal.set(sexo, gg);
+      }
+      gg.total += g.total;
+      gg.acertos += g.acertos;
+      gg.erros += g.erros;
+      gg.naoRespondeu += g.naoRespondeu;
+    }
+  }
+  const porGeneroGlobal: GeneroBreakdown[] = [...generoGlobal.entries()].map(([sexo, g]) => ({
+    sexo,
+    total: g.total,
+    acertos: g.acertos,
+    erros: g.erros,
+    naoRespondeu: g.naoRespondeu,
+    pctAcerto: g.total > 0 ? round1((g.acertos / g.total) * 100) : null,
+    classificacao: classificar(g.total > 0 ? round1((g.acertos / g.total) * 100) : null, thresholds),
+  }));
+  porGeneroGlobal.sort((a, b) => b.total - a.total);
+
+  const porGenero: Record<string, GeneroBreakdown[]> = {};
+  for (const [hab, acc] of byHab.entries()) {
+    porGenero[hab] = (acc as any).generosFinal;
+  }
+
+  return { resumo, habilidades, questoesPorHabilidade, alunosPorHabilidade, porGenero, porGeneroGlobal, thresholds };
 }
 
 /** Opções para os filtros da tela de análise. */

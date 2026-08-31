@@ -49,8 +49,8 @@ export default async function AdminHabilidadesPage({
 
   const conditions = [sql`q.habilidade IS NOT NULL AND cardinality(q.habilidade) > 0`];
   if (provaId) conditions.push(eq(respostasAlunos.provaId, Number(provaId)));
-  if (escolaNome) conditions.push(eq(respostasAlunos.escolaNome, escolaNome));
-  if (turmaNome) conditions.push(eq(respostasAlunos.alunoTurma, turmaNome));
+  if (escolaNome) conditions.push(sql`ra.escola_nome = ${escolaNome}`);
+  if (turmaNome) conditions.push(sql`ra.aluno_turma = ${turmaNome}`);
   if (etnia) conditions.push(sql`a.etnia = ${etnia}`);
   if (sexo) conditions.push(sql`a.sexo = ${sexo}`);
   if (bairro) conditions.push(sql`a.bairro = ${bairro}`);

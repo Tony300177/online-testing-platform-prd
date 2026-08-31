@@ -118,6 +118,20 @@ export default function HabilidadesAnaliseView({
     [habilidades]
   );
 
+  const porDisciplina = useMemo(() => {
+    const grupos: Record<string, HabilidadeAgg[]> = {};
+    for (const h of habilidades) {
+      for (const d of h.disciplinas) {
+        if (!grupos[d]) grupos[d] = [];
+        grupos[d].push(h);
+      }
+    }
+    for (const d of Object.keys(grupos)) {
+      grupos[d].sort((a, b) => b.total - a.total || a.habilidade.localeCompare(b.habilidade));
+    }
+    return grupos;
+  }, [habilidades]);
+
   function downloadCsv() {
     const header = ["Habilidade", "Disciplina", "Questões", "Total de oportunidades", "Acertos", "Erros", "Não respondeu", "% Acerto", "% Erro", "Classificação"];
     const rows: (string | number)[][] = habilidades.map((h) => [
@@ -207,81 +221,99 @@ export default function HabilidadesAnaliseView({
         <>
           {/* Análise geral da turma */}
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-5">
-              <h2 className="flex items-center gap-1.5 text-sm font-bold text-emerald-800">
-                <TrendingUp className="h-4 w-4" /> Melhores desempenhos
-              </h2>
-              <ul className="mt-3 space-y-1.5">
-                {ordenadas.slice(0, 5).map((h) => (
-                  <li key={h.habilidade}>
-                    <button onClick={() => setSelecionada(h.habilidade)} className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-sm transition hover:bg-emerald-100/70">
-                      <span className="font-semibold text-emerald-900">{h.habilidade}</span>
-                      <span className="font-bold text-emerald-700">{pct(h.pctAcerto)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-5">
-              <h2 className="flex items-center gap-1.5 text-sm font-bold text-rose-800">
-                <TrendingDown className="h-4 w-4" /> Precisam de maior atenção
-              </h2>
-              <ul className="mt-3 space-y-1.5">
-                {[...ordenadas].reverse().slice(0, 5).map((h) => (
-                  <li key={h.habilidade}>
-                    <button onClick={() => setSelecionada(h.habilidade)} className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-sm transition hover:bg-rose-100/70">
-                      <span className="font-semibold text-rose-900">{h.habilidade}</span>
-                      <span className="font-bold text-rose-700">{pct(h.pctAcerto)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {Object.entries(porDisciplina).map(([disciplina, habs]) => {
+              const ordenadasDisc = [...habs].filter((h) => h.pctAcerto !== null).sort((a, b) => (b.pctAcerto ?? 0) - (a.pctAcerto ?? 0));
+              return (
+                <div key={disciplina} className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-5">
+                  <h2 className="flex items-center gap-1.5 text-sm font-bold text-emerald-800">
+                    <TrendingUp className="h-4 w-4" /> {disciplina} — Melhores desempenhos
+                  </h2>
+                  <ul className="mt-3 space-y-1.5">
+                    {ordenadasDisc.slice(0, 5).map((h) => (
+                      <li key={h.habilidade}>
+                        <button onClick={() => setSelecionada(h.habilidade)} className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-sm transition hover:bg-emerald-100/70">
+                          <span className="font-semibold text-emerald-900">{h.habilidade}</span>
+                          <span className="font-bold text-emerald-700">{pct(h.pctAcerto)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+            {Object.entries(porDisciplina).map(([disciplina, habs]) => {
+              const ordenadasDisc = [...habs].filter((h) => h.pctAcerto !== null).sort((a, b) => (b.pctAcerto ?? 0) - (a.pctAcerto ?? 0));
+              return (
+                <div key={disciplina + "-pior"} className="rounded-xl border border-rose-200 bg-rose-50/60 p-5">
+                  <h2 className="flex items-center gap-1.5 text-sm font-bold text-rose-800">
+                    <TrendingDown className="h-4 w-4" /> {disciplina} — Precisam de maior atenção
+                  </h2>
+                  <ul className="mt-3 space-y-1.5">
+                    {[...ordenadasDisc].reverse().slice(0, 5).map((h) => (
+                      <li key={h.habilidade}>
+                        <button onClick={() => setSelecionada(h.habilidade)} className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-sm transition hover:bg-rose-100/70">
+                          <span className="font-semibold text-rose-900">{h.habilidade}</span>
+                          <span className="font-bold text-rose-700">{pct(h.pctAcerto)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Tabela de habilidades */}
-          <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full min-w-[760px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                  <th className="px-4 py-3 font-semibold">Habilidade</th>
-                  <th className="px-3 py-3 text-center font-semibold">Questões</th>
-                  <th className="px-3 py-3 text-center font-semibold">Total</th>
-                  <th className="px-3 py-3 text-center font-semibold text-emerald-700">Acertos</th>
-                  <th className="px-3 py-3 text-center font-semibold text-rose-700">Erros</th>
-                  <th className="px-3 py-3 text-center font-semibold text-slate-500">Não resp.</th>
-                  <th className="px-3 py-3 text-center font-semibold">% Acerto</th>
-                  <th className="px-3 py-3 text-center font-semibold">% Erro</th>
-                  <th className="px-4 py-3 font-semibold">Classificação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {habilidades.map((h) => (
-                  <tr
-                    key={h.habilidade}
-                    onClick={() => setSelecionada(selecionada === h.habilidade ? null : h.habilidade)}
-                    className={`cursor-pointer border-b border-slate-50 transition hover:bg-indigo-50/40 ${selecionada === h.habilidade ? "bg-indigo-50/70" : ""}`}
-                  >
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1.5 font-bold text-slate-800">
-                        {h.habilidade}
-                        <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${selecionada === h.habilidade ? "rotate-180" : ""}`} />
-                      </span>
-                      <p className="text-[11px] text-slate-400">{h.disciplinas.join(", ")}</p>
-                    </td>
-                    <td className="px-3 py-3 text-center">{h.questoesCount}</td>
-                    <td className="px-3 py-3 text-center font-semibold">{h.total}</td>
-                    <td className="px-3 py-3 text-center font-semibold text-emerald-700">{h.acertos}</td>
-                    <td className="px-3 py-3 text-center font-semibold text-rose-600">{h.erros}</td>
-                    <td className="px-3 py-3 text-center text-slate-500">{h.naoRespondeu}</td>
-                    <td className="px-3 py-3 text-center font-bold text-slate-800">{pct(h.pctAcerto)}</td>
-                    <td className="px-3 py-3 text-center text-slate-600">{pct(h.pctErro)}</td>
-                    <td className="px-4 py-3"><ClassBadge classificacao={h.classificacao} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {/* Tabelas por disciplina */}
+          {Object.entries(porDisciplina).map(([disciplina, habs]) => (
+            <div key={disciplina} className="mt-6">
+              <h3 className="mb-3 flex items-center gap-2 text-lg font-bold text-slate-800">
+                <Target className="h-5 w-5 text-indigo-600" />
+                {disciplina}
+              </h3>
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                <table className="w-full min-w-[760px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                      <th className="px-4 py-3 font-semibold">Habilidade</th>
+                      <th className="px-3 py-3 text-center font-semibold">Questões</th>
+                      <th className="px-3 py-3 text-center font-semibold">Total</th>
+                      <th className="px-3 py-3 text-center font-semibold text-emerald-700">Acertos</th>
+                      <th className="px-3 py-3 text-center font-semibold text-rose-700">Erros</th>
+                      <th className="px-3 py-3 text-center font-semibold text-slate-500">Não resp.</th>
+                      <th className="px-3 py-3 text-center font-semibold">% Acerto</th>
+                      <th className="px-3 py-3 text-center font-semibold">% Erro</th>
+                      <th className="px-4 py-3 font-semibold">Classificação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {habs.map((h) => (
+                      <tr
+                        key={disciplina + "-" + h.habilidade}
+                        onClick={() => setSelecionada(selecionada === h.habilidade ? null : h.habilidade)}
+                        className={`cursor-pointer border-b border-slate-50 transition hover:bg-indigo-50/40 ${selecionada === h.habilidade ? "bg-indigo-50/70" : ""}`}
+                      >
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5 font-bold text-slate-800">
+                            {h.habilidade}
+                            <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${selecionada === h.habilidade ? "rotate-180" : ""}`} />
+                          </span>
+                          <p className="text-[11px] text-slate-400">{h.disciplinas.join(", ")}</p>
+                        </td>
+                        <td className="px-3 py-3 text-center">{h.questoesCount}</td>
+                        <td className="px-3 py-3 text-center font-semibold">{h.total}</td>
+                        <td className="px-3 py-3 text-center font-semibold text-emerald-700">{h.acertos}</td>
+                        <td className="px-3 py-3 text-center font-semibold text-rose-600">{h.erros}</td>
+                        <td className="px-3 py-3 text-center text-slate-500">{h.naoRespondeu}</td>
+                        <td className="px-3 py-3 text-center font-bold text-slate-800">{pct(h.pctAcerto)}</td>
+                        <td className="px-3 py-3 text-center text-slate-600">{pct(h.pctErro)}</td>
+                        <td className="px-4 py-3"><ClassBadge classificacao={h.classificacao} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
           <p className="mt-2 flex items-start gap-1.5 text-[11px] text-slate-400">
             <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             Percentuais calculados sobre o total de oportunidades (questões da habilidade × alunos). Respostas em branco são

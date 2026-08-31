@@ -33,6 +33,11 @@ export type HabilidadeFilters = {
   periodoFim?: string; // YYYY-MM-DD
   /** Restrição de acesso (professor só vê as próprias provas). */
   allowedProvaIds?: number[];
+  etnia?: string;
+  sexo?: string;
+  bairro?: string;
+  professorId?: string;
+  alunoNome?: string;
 };
 
 export type ResultadoTipo = "acerto" | "erro" | "nao_respondeu";
@@ -152,6 +157,11 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
   if (filters.alunoId) conditions.push(sql`ra.aluno_id = ${filters.alunoId}`);
   if (filters.periodoInicio) conditions.push(sql`ra.respondida_em >= ${filters.periodoInicio}::date`);
   if (filters.periodoFim) conditions.push(sql`ra.respondida_em < (${filters.periodoFim}::date + interval '1 day')`);
+  if (filters.etnia) conditions.push(sql`a.etnia = ${filters.etnia}`);
+  if (filters.sexo) conditions.push(sql`a.sexo = ${filters.sexo}`);
+  if (filters.bairro) conditions.push(sql`a.bairro = ${filters.bairro}`);
+  if (filters.professorId) conditions.push(sql`t.professor_id = ${filters.professorId}`);
+  if (filters.alunoNome) conditions.push(sql`a.nome ILIKE ${'%' + filters.alunoNome + '%'}`);
   if (filters.allowedProvaIds) {
     if (filters.allowedProvaIds.length === 0) {
       return emptyAnalise(await getThresholds());
@@ -180,6 +190,8 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
     FROM respostas_alunos ra
     INNER JOIN questoes q ON q.id = ra.questao_id
     INNER JOIN provas p ON p.id = ra.prova_id
+    LEFT JOIN alunos a ON a.id = ra.aluno_id
+    LEFT JOIN turmas t ON t.id = ra.turma_id
     WHERE ${sql.join(conditions, sql` AND `)}
     ORDER BY 1, q.numero, ra.aluno_nome
   `);

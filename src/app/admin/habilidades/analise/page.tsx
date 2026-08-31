@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { provas, escolas, turmas } from "@/db/schema";
+import { provas, escolas, turmas, alunos, professores } from "@/db/schema";
 import {
   getHabilidadesAnalise,
   getHabilidadesFilterOptions,
@@ -37,6 +37,11 @@ export default async function HabilidadesAnalisePage({ searchParams }: { searchP
   const alunoId = str(sp, "alunoId");
   const periodoInicio = str(sp, "periodoInicio");
   const periodoFim = str(sp, "periodoFim");
+  const etnia = str(sp, "etnia");
+  const sexo = str(sp, "sexo");
+  const bairro = str(sp, "bairro");
+  const professorId = str(sp, "professorId");
+  const alunoNome = str(sp, "alunoNome");
 
   const filters: HabilidadeFilters = { allowedProvaIds };
   if (provaId) filters.provaId = Number(provaId);
@@ -45,6 +50,11 @@ export default async function HabilidadesAnalisePage({ searchParams }: { searchP
   if (alunoId) filters.alunoId = alunoId;
   if (periodoInicio) filters.periodoInicio = periodoInicio;
   if (periodoFim) filters.periodoFim = periodoFim;
+  if (etnia) filters.etnia = etnia;
+  if (sexo) filters.sexo = sexo;
+  if (bairro) filters.bairro = bairro;
+  if (professorId) filters.professorId = professorId;
+  if (alunoNome) filters.alunoNome = alunoNome;
 
   // Buscar escolas e turmas (filtrar turmas por escola se selecionada)
   const escolasList = await db.select({ id: escolas.id, nome: escolas.nome }).from(escolas).orderBy(escolas.nome);
@@ -54,6 +64,14 @@ export default async function HabilidadesAnalisePage({ searchParams }: { searchP
     .from(turmas)
     .where(turmasConditions.length ? turmasConditions[0] : sql`1=1`)
     .orderBy(turmas.nome);
+
+  // Buscar opções para os novos filtros
+  const [etniasList, sexosList, bairrosList, professoresList] = await Promise.all([
+    db.selectDistinct({ etnia: alunos.etnia }).from(alunos).where(sql`${alunos.etnia} IS NOT NULL`).orderBy(alunos.etnia),
+    db.selectDistinct({ sexo: alunos.sexo }).from(alunos).where(sql`${alunos.sexo} IS NOT NULL`).orderBy(alunos.sexo),
+    db.selectDistinct({ bairro: alunos.bairro }).from(alunos).where(sql`${alunos.bairro} IS NOT NULL`).orderBy(alunos.bairro),
+    db.select({ id: professores.id, nome: professores.nome }).from(professores).orderBy(professores.nome),
+  ]);
 
   const [options, analise] = await Promise.all([
     getHabilidadesFilterOptions(allowedProvaIds),
@@ -99,7 +117,7 @@ export default async function HabilidadesAnalisePage({ searchParams }: { searchP
       : { rows: [] };
 
   const query = new URLSearchParams();
-  for (const [k, v] of Object.entries({ escolaId, provaId, turmaId, habilidade, alunoId, periodoInicio, periodoFim })) {
+  for (const [k, v] of Object.entries({ escolaId, provaId, turmaId, habilidade, alunoId, periodoInicio, periodoFim, etnia, sexo, bairro, professorId, alunoNome })) {
     if (v) query.set(k, v);
   }
 
@@ -113,7 +131,7 @@ export default async function HabilidadesAnalisePage({ searchParams }: { searchP
       <form method="get" className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div>
           <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Escola</label>
-          <select name="escolaId" defaultValue={escolaId} onChange={(e) => e.currentTarget.form.submit()} className="max-w-[200px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+          <select name="escolaId" defaultValue={escolaId} onChange={(e) => { const form = e.currentTarget.form; if (form) form.submit(); }} className="max-w-[200px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
             <option value="">Todas as escolas</option>
             {escolasList.map((e) => (
               <option key={e.id} value={e.id}>{e.nome}</option>
@@ -131,12 +149,52 @@ export default async function HabilidadesAnalisePage({ searchParams }: { searchP
         </div>
         <div>
           <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Turma</label>
-          <select name="turmaId" defaultValue={turmaId} className="max-w-[180px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+          <select name="turmaId" defaultValue={turmaId} onChange={(e) => { const form = e.currentTarget.form; if (form) form.submit(); }} className="max-w-[180px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
             <option value="">Todas as turmas</option>
             {turmasList.map((t) => (
               <option key={t.id} value={t.id}>{t.nome}</option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Etnia</label>
+          <select name="etnia" defaultValue={etnia} className="max-w-[150px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <option value="">Todas</option>
+            {etniasList.map((e: { etnia: string | null }) => e.etnia && (
+              <option key={e.etnia} value={e.etnia}>{e.etnia}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Gênero</label>
+          <select name="sexo" defaultValue={sexo} className="max-w-[130px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <option value="">Todos</option>
+            {sexosList.map((s: { sexo: string | null }) => s.sexo && (
+              <option key={s.sexo} value={s.sexo}>{s.sexo}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Bairro</label>
+          <select name="bairro" defaultValue={bairro} className="max-w-[150px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <option value="">Todos</option>
+            {bairrosList.map((b: { bairro: string | null }) => b.bairro && (
+              <option key={b.bairro} value={b.bairro}>{b.bairro}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Professor</label>
+          <select name="professorId" defaultValue={professorId} className="max-w-[180px] rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <option value="">Todos</option>
+            {professoresList.map((p) => (
+              <option key={p.id} value={p.id}>{p.nome}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Buscar por nome</label>
+          <input type="text" name="alunoNome" defaultValue={alunoNome} placeholder="Nome do aluno..." className="max-w-[200px] rounded-lg border border-slate-200 px-3 py-2 text-sm" />
         </div>
         <div>
           <label className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-400">Habilidade</label>

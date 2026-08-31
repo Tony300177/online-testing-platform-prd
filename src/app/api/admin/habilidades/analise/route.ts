@@ -27,6 +27,11 @@ export async function GET(req: Request) {
     if (sp.get("alunoId")) filters.alunoId = sp.get("alunoId")!;
     if (sp.get("periodoInicio")) filters.periodoInicio = sp.get("periodoInicio")!;
     if (sp.get("periodoFim")) filters.periodoFim = sp.get("periodoFim")!;
+    if (sp.get("etnia")) filters.etnia = sp.get("etnia")!;
+    if (sp.get("sexo")) filters.sexo = sp.get("sexo")!;
+    if (sp.get("bairro")) filters.bairro = sp.get("bairro")!;
+    if (sp.get("professorId")) filters.professorId = sp.get("professorId")!;
+    if (sp.get("alunoNome")) filters.alunoNome = sp.get("alunoNome")!;
 
     const data = await getHabilidadesAnalise(filters);
     return NextResponse.json({ ok: true, data });

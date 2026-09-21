@@ -19,6 +19,28 @@ type EscolaItem = { id: string; nome: string; turmas: TurmaItem[] };
 
 type TurmaForm = { nome: string; ano: string; turno: string; professor: string };
 
+const ESCOLAS_MUNICIPAIS: { numero: number; nome: string }[] = [
+  { numero: 1, nome: "CENTRO DE EDUCAÇÃO INFANTIL ARCO IRIS" },
+  { numero: 2, nome: "CENTRO DE EDUCAÇÃO INFANTIL BRUNO LEONARDO DA COSTA CAMPOS" },
+  { numero: 3, nome: "CENTRO DE EDUCAÇÃO INFANTIL CRIANÇA FELIZ" },
+  { numero: 4, nome: "CENTRO DE EDUCAÇÃO INFANTIL DOM FRANCO DALLA VALLE" },
+  { numero: 5, nome: "CENTRO DE EDUCAÇÃO INFANTIL LUIZ FELIPE MARTINS MARQUES LUIZ" },
+  { numero: 6, nome: "CENTRO DE EDUCAÇÃO INFANTIL MENINO JESUS" },
+  { numero: 7, nome: "CENTRO DE EDUCAÇÃO INFANTIL NOSSO LAR" },
+  { numero: 8, nome: "CENTRO DE EDUCAÇÃO MUNICIPAL DR. GUILHERME FREITAS DE ABREU LIMA" },
+  { numero: 9, nome: "CENTRO DE EDUCAÇÃO MUNICIPAL PROFESSOR ORLANDO PEREIRA" },
+  { numero: 10, nome: "CENTRO DE EDUCAÇÃO MUNICIPAL SÃO CRISTÓVÃO" },
+  { numero: 11, nome: "CENTRO DE EDUCAÇÃO MUNICIPAL VASCO PAPA" },
+  { numero: 12, nome: "ESCOLA MUNICIPAL PADRE JOSÉ DE ANCHIETA" },
+  { numero: 13, nome: "ESCOLA MUNICIPAL PAULO FREIRE" },
+  { numero: 14, nome: "ESCOLA MUNICIPAL PROFESSORA MARIA HILDA PANAS" },
+  { numero: 15, nome: "ESCOLA MUNICIPAL RURAL EUCLIDES DA CUNHA" },
+  { numero: 16, nome: "ESCOLA MUNICIPAL VINICIUS DE MORAES" },
+  { numero: 17, nome: "ESCOLA RURAL MUNICIPAL ALVARES DE AZEVEDO" },
+  { numero: 18, nome: "ESCOLA RURAL MUNICIPAL CORA CORALINA" },
+  { numero: 19, nome: "ESCOLA RURAL MUNICIPAL OSVALDO CRUZ" },
+];
+
 export default function CadastroPanel({ initialEscolas }: { initialEscolas: EscolaItem[] }) {
   const [escolas, setEscolas] = useState<EscolaItem[]>(initialEscolas);
   const [tab, setTab] = useState<"escola" | "aluno">("escola");
@@ -27,7 +49,7 @@ export default function CadastroPanel({ initialEscolas }: { initialEscolas: Esco
   const [ok, setOk] = useState("");
 
   // ----- Formulário de escola -----
-  const [escolaNome, setEscolaNome] = useState("");
+  const [escolaCodigo, setEscolaCodigo] = useState<number | "">("");
   const [turmas, setTurmas] = useState<TurmaForm[]>([{ nome: "", ano: "", turno: "", professor: "" }]);
 
   // ----- Formulário de aluno -----
@@ -63,12 +85,17 @@ export default function CadastroPanel({ initialEscolas }: { initialEscolas: Esco
     setError("");
     setOk("");
     const validTurmas = turmas.filter((t) => t.nome.trim() && t.ano.trim() && t.turno.trim());
+    const escolaSel = ESCOLAS_MUNICIPAIS.find((ec) => ec.numero === escolaCodigo);
+    if (!escolaSel) {
+      setError("Selecione a unidade escolar.");
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch("/api/escolas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: escolaNome, turmas: validTurmas }),
+        body: JSON.stringify({ nome: escolaSel.nome, codigo: escolaSel.numero, turmas: validTurmas }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -76,7 +103,7 @@ export default function CadastroPanel({ initialEscolas }: { initialEscolas: Esco
         return;
       }
       setOk(`Escola "${data.nome}" cadastrada com ${data.turmas} turma(s).`);
-      setEscolaNome("");
+      setEscolaCodigo("");
       setTurmas([{ nome: "", ano: "", turno: "", professor: "" }]);
       await refresh();
     } catch {
@@ -179,13 +206,21 @@ export default function CadastroPanel({ initialEscolas }: { initialEscolas: Esco
             <p className="mt-1 text-xs text-slate-400">A senha padrão dos alunos é 123456.</p>
 
             <div className="mt-5">
-              <label className={labelCls}>Nome da escola</label>
-              <input
-                value={escolaNome}
-                onChange={(e) => setEscolaNome(e.target.value.toUpperCase())}
-                placeholder="Ex.: ESCOLA MUNICIPAL NOVA ERA"
-                className={inputCls}
-              />
+              <label className={labelCls}>Unidade Escolar</label>
+              <select
+                value={escolaCodigo}
+                onChange={(e) => setEscolaCodigo(e.target.value === "" ? "" : Number(e.target.value))}
+                className={cn(inputCls, "cursor-pointer")}
+              >
+                <option value="" disabled>
+                  Selecione a unidade escolar
+                </option>
+                {ESCOLAS_MUNICIPAIS.map((ec) => (
+                  <option key={ec.numero} value={ec.numero}>
+                    {String(ec.numero).padStart(2, "0")} | {ec.nome}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="mt-5">

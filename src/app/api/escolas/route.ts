@@ -17,6 +17,7 @@ export async function POST(req: Request) {
 
   const body = (await req.json().catch(() => null)) ?? {};
   const nome = typeof body.nome === "string" ? body.nome.trim() : "";
+  const codigoInput = Number.isFinite(Number(body.codigo)) && Number(body.codigo) > 0 ? Math.trunc(Number(body.codigo)) : null;
   const turmasInput = Array.isArray(body.turmas) ? (body.turmas as TurmaInput[]) : [];
 
   if (nome.length < 3) {
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
 
   const [maxEscola] = await db.select({ m: max(escolas.codigo) }).from(escolas);
   const [maxTurma] = await db.select({ m: max(turmas.codigo) }).from(turmas);
-  const escolaCodigo = (maxEscola?.m ?? 0) + 1;
+  const escolaCodigo = codigoInput ?? (maxEscola?.m ?? 0) + 1;
   let turmaCodigo = (maxTurma?.m ?? 0) + 1;
 
   const { id: escolaId } = await db.transaction(async (tx) => {

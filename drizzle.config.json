@@ -2,6 +2,6 @@
   "dialect": "postgresql",
   "schema": "./src/db/schema.ts",
   "dbCredentials": {
-    "url": "postgresql://postgres:Mud@r202650@db.sapdcqqcdvetxwwdvytv.supabase.co:5432/postgres"
+    "url": "postgresql://postgres.qmeqkdbeldfxxfmpfbaw:Mud%40r202650@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
   }
 }

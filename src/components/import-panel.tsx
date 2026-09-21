@@ -17,15 +17,11 @@ import { cn } from "@/lib/utils";
 
 // Conjunto de cabeçalhos conhecidos para auto-detecção (normalizados: uppercase, sem acento, sem ºª)
 const KNOWN_HEADER_SET = new Set([
-  "ESCOLA", "TURMA", "TURNO", "ANO LETIVO", "PROFESSOR", "ALUNO", "ALUNOS",
-  "SEXO", "GENERO", "COR/RACA", "COR", "RACA", "ETNIA", "BAIRRO",
-  "MATRICULA", "CHAMADA", "N CHAMADA", "NASCIMENTO", "DATA NASCIMENTO",
-  "ESCOLA CODIGO", "TURMA ANO", "ANO", "SERIE", "PROFESSOR CODIGO", "CODIGO PROFESSOR",
-  "PERIODO", "DATA DE NASCIMENTO", "COR RACA", "DATA DE NASC.",
-  "NOME DA ESCOLA", "NOME DO ALUNO", "NOME DO PROFESSOR", "BAIRRO DE RESIDENCIA",
-  "RESIDENCIA", "NUMERO DE CHAMADA",
-  "N MATRICULA", "NUMERO DE MATRICULA", "TIPO DE NE", "NE - NECESSIDADES ESPECIAIS",
-  "N", "NO",
+  "ESCOLA", "NOME DA ESCOLA", "NOME DA UNIDADE", "UNIDADE",
+  "TURMA", "NOME DA TURMA", "CLASSE", "SALA",
+  "ANO", "SERIE", "ANO/SERIE", "ANO E SERIE", "TURMA ANO",
+  "TURNO", "PERIODO", "PERIODO AULA", "HORARIO",
+  "PROFESSOR", "NOME DO PROFESSOR", "DOCENTE",
 ]);
 
 type ImportReport = {
@@ -39,17 +35,16 @@ type ImportReport = {
     status: "ok" | "aviso" | "erro";
     escola: string;
     turma: string;
-    aluno: string;
+    ano: string;
+    turno: string;
     professor: string;
     motivos: string[];
   }[];
-  resumo: { escola: string; turma: string; professor: string; alunos: number }[];
+  resumo: { escola: string; turma: string; ano: string; turno: string; professor: string }[];
   escrita?: {
     escolasCriadas: number;
     professoresCriados: number;
-    alunosCriados: number;
     turmasCriadas: number;
-    matriculasCriadas: number;
     ignoradas: number;
   };
 };
@@ -58,49 +53,36 @@ type FileState = { name: string; size: number; rows: Record<string, string | num
 
 const TEMPLATE_HEADERS = [
   "ESCOLA",
-  "ESCOLA_CODIGO",
   "TURMA",
-  "TURMA_ANO",
+  "ANO",
   "TURNO",
-  "ANO_LETIVO",
   "PROFESSOR",
-  "PROFESSOR_CODIGO",
-  "ALUNO",
-  "NUMERO_CHAMADA",
-  "MATRICULA",
-  "SEXO",
-  "COR_RACA",
-  "BAIRRO",
-  "DATA_NASCIMENTO",
 ];
 
 const TEMPLATE_EXAMPLE = [
   "CEM - VASCO PAPA",
-  "1",
   "5º A",
   "5º Ano",
   "Matutino",
-  "2026",
   "JANETE FRANCISCA DA SILVA",
-  "168",
-  "YASMIN DAMACENO SANTOS FERREIRA",
-  "1",
-  "",
-  "F",
-  "Parda",
-  "CENTRO",
-  "01/02/2015",
 ];
+
+function downloadExcel(headers: string[], example: string[]) {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet([Object.fromEntries(headers.map((h, i) => [h, example[i]]))]);
+  XLSX.utils.book_append_sheet(wb, ws, "Modelo");
+  XLSX.writeFile(wb, "modelo-importacao-turmas.xlsx");
+}
 
 function buildErrorCsv(report: ImportReport): string {
   const lines: string[][] = [
-    ["Linha", "Escola", "Turma", "Aluno", "Status", "Motivo"],
+    ["Linha", "Escola", "Turma", "Ano", "Turno", "Professor", "Status", "Motivo"],
     ...report.itens
       .filter((i) => i.status === "erro")
-      .map((i) => [String(i.linha), i.escola, i.turma, i.aluno, "Erro", i.motivos.join("; ")]),
+      .map((i) => [String(i.linha), i.escola, i.turma, i.ano, i.turno, i.professor, "Erro", i.motivos.join("; ")]),
     ...report.itens
       .filter((i) => i.status === "aviso")
-      .map((i) => [String(i.linha), i.escola, i.turma, i.aluno, "Aviso", i.motivos.join("; ")]),
+      .map((i) => [String(i.linha), i.escola, i.turma, i.ano, i.turno, i.professor, "Aviso", i.motivos.join("; ")]),
   ];
   const escape = (v: string) => (/[",;\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   const body = lines.map((r) => r.map(escape).join(";")).join("\r\n");
@@ -233,9 +215,6 @@ export default function ImportPanel() {
     }
   }
 
-  const inputCls =
-    "w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
-
   return (
     <div className="space-y-6">
       {/* Modelo */}
@@ -245,15 +224,15 @@ export default function ImportPanel() {
             <Info className="h-4 w-4" /> Modelo de planilha
           </h2>
           <p className="mt-0.5 text-xs text-indigo-700">
-            Colunas: ESCOLA, TURMA, TURNO, ANO_LETIVO, PROFESSOR, ALUNO, SEXO, COR_RACA, BAIRRO, DATA_NASCIMENTO (e opcionais).
+            Colunas: ESCOLA, TURMA, ANO, TURNO e PROFESSOR (uma linha por turma).
           </p>
         </div>
         <button
           type="button"
-          onClick={() => downloadCsv(`\uFEFF${[TEMPLATE_HEADERS.join(";"), TEMPLATE_EXAMPLE.join(";")].join("\r\n")}`, "modelo-importacao.csv")}
+          onClick={() => downloadExcel(TEMPLATE_HEADERS, TEMPLATE_EXAMPLE)}
           className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
         >
-          <Download className="h-3.5 w-3.5" /> Baixar modelo CSV
+          <Download className="h-3.5 w-3.5" /> Baixar modelo Excel
         </button>
       </div>
 
@@ -272,7 +251,7 @@ export default function ImportPanel() {
         <p className="text-sm font-semibold text-slate-700">
           {file ? file.name : "Arraste a planilha do Vasco Papa ou clique para selecionar"}
         </p>
-        <p className="text-xs text-slate-400">Aceita .xlsx, .xls e .csv · máximo 5.000 linhas</p>
+        <p className="text-xs text-slate-400">Aceita .xlsx e .xls · máximo 5.000 linhas</p>
         {file && (
           <p className="text-xs text-slate-500">
             {file.rows.length} linha(s) de dados · {(file.size / 1024).toFixed(1)} KB
@@ -281,7 +260,7 @@ export default function ImportPanel() {
         <input
           ref={inputRef}
           type="file"
-          accept=".xlsx,.xls,.csv"
+          accept=".xlsx,.xls"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -367,8 +346,9 @@ export default function ImportPanel() {
                   <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                     <th className="px-4 py-2.5 font-semibold">Escola</th>
                     <th className="px-4 py-2.5 font-semibold">Turma</th>
+                    <th className="px-4 py-2.5 font-semibold">Ano</th>
+                    <th className="px-4 py-2.5 font-semibold">Turno</th>
                     <th className="px-4 py-2.5 font-semibold">Professor</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">Alunos</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -376,8 +356,9 @@ export default function ImportPanel() {
                     <tr key={`${r.escola}-${r.turma}`} className="border-b border-slate-50">
                       <td className="px-4 py-2.5 text-slate-700">{r.escola}</td>
                       <td className="px-4 py-2.5 font-semibold text-slate-800">{r.turma}</td>
-                      <td className="px-4 py-2.5 text-slate-500">{r.professor}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-slate-800">{r.alunos}</td>
+                      <td className="px-4 py-2.5 text-slate-500">{r.ano}</td>
+                      <td className="px-4 py-2.5 text-slate-500">{r.turno}</td>
+                      <td className="px-4 py-2.5 text-slate-700">{r.professor}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -387,13 +368,11 @@ export default function ImportPanel() {
 
           {/* Escrita */}
           {published && report.escrita && (
-            <div className="grid gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:grid-cols-2 lg:grid-cols-4">
               <WriteStat label="Escolas criadas" value={report.escrita.escolasCriadas} />
               <WriteStat label="Professores criados" value={report.escrita.professoresCriados} />
-              <WriteStat label="Alunos criados" value={report.escrita.alunosCriados} />
               <WriteStat label="Turmas criadas" value={report.escrita.turmasCriadas} />
-              <WriteStat label="Matrículas criadas" value={report.escrita.matriculasCriadas} />
-              <WriteStat label="Linhas ignoradas (já existiam)" value={report.escrita.ignoradas} />
+              <WriteStat label="Turmas já existiam (mantidas)" value={report.escrita.ignoradas} />
             </div>
           )}
 
@@ -411,7 +390,9 @@ export default function ImportPanel() {
                     <th className="px-4 py-2.5 font-semibold">Linha</th>
                     <th className="px-4 py-2.5 font-semibold">Escola</th>
                     <th className="px-4 py-2.5 font-semibold">Turma</th>
-                    <th className="px-4 py-2.5 font-semibold">Aluno</th>
+                    <th className="px-4 py-2.5 font-semibold">Ano</th>
+                    <th className="px-4 py-2.5 font-semibold">Turno</th>
+                    <th className="px-4 py-2.5 font-semibold">Professor</th>
                     <th className="px-4 py-2.5 font-semibold">Motivo</th>
                   </tr>
                 </thead>
@@ -423,7 +404,9 @@ export default function ImportPanel() {
                         <td className="px-4 py-2.5 font-mono text-slate-500">{i.linha}</td>
                         <td className="px-4 py-2.5 text-slate-700">{i.escola}</td>
                         <td className="px-4 py-2.5 text-slate-700">{i.turma}</td>
-                        <td className="px-4 py-2.5 text-slate-700">{i.aluno}</td>
+                        <td className="px-4 py-2.5 text-slate-500">{i.ano}</td>
+                        <td className="px-4 py-2.5 text-slate-500">{i.turno}</td>
+                        <td className="px-4 py-2.5 text-slate-700">{i.professor}</td>
                         <td className="px-4 py-2.5">
                           {i.motivos.map((m, idx) => (
                             <p key={idx} className="text-rose-600">
@@ -452,7 +435,9 @@ export default function ImportPanel() {
                     <th className="px-4 py-2.5 font-semibold">Linha</th>
                     <th className="px-4 py-2.5 font-semibold">Escola</th>
                     <th className="px-4 py-2.5 font-semibold">Turma</th>
-                    <th className="px-4 py-2.5 font-semibold">Aluno</th>
+                    <th className="px-4 py-2.5 font-semibold">Ano</th>
+                    <th className="px-4 py-2.5 font-semibold">Turno</th>
+                    <th className="px-4 py-2.5 font-semibold">Professor</th>
                     <th className="px-4 py-2.5 font-semibold">Observação</th>
                   </tr>
                 </thead>
@@ -464,7 +449,9 @@ export default function ImportPanel() {
                         <td className="px-4 py-2.5 font-mono text-slate-500">{i.linha}</td>
                         <td className="px-4 py-2.5 text-slate-700">{i.escola}</td>
                         <td className="px-4 py-2.5 text-slate-700">{i.turma}</td>
-                        <td className="px-4 py-2.5 text-slate-700">{i.aluno}</td>
+                        <td className="px-4 py-2.5 text-slate-500">{i.ano}</td>
+                        <td className="px-4 py-2.5 text-slate-500">{i.turno}</td>
+                        <td className="px-4 py-2.5 text-slate-700">{i.professor}</td>
                         <td className="px-4 py-2.5">
                           {i.motivos.map((m, idx) => (
                             <p key={idx} className="text-amber-700">

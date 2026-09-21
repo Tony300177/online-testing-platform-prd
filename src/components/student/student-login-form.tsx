@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound, Loader2, Lock, LogIn } from "lucide-react";
+import { ESCOLAS_MUNICIPAIS, escolaLabel } from "@/lib/municipal-schools";
 
 type SchoolAluno = { id: string; nome: string; numeroChamada: number | null };
 type SchoolTurma = { id: string; nome: string; ano: string; turno: string; professor: string | null; alunos: SchoolAluno[] };
@@ -12,7 +13,7 @@ type SchoolOption = { id: string; nome: string; turmas: SchoolTurma[] };
 export default function StudentLoginForm() {
   const router = useRouter();
   const [schoolData, setSchoolData] = useState<SchoolOption[]>([]);
-  const [escolaId, setEscolaId] = useState("");
+  const [escolaCodigo, setEscolaCodigo] = useState<number | "">("");
   const [turmaId, setTurmaId] = useState("");
   const [alunoId, setAlunoId] = useState("");
   const [senha, setSenha] = useState("");
@@ -34,7 +35,10 @@ export default function StudentLoginForm() {
     };
   }, []);
 
-  const selectedEscola = schoolData.find((e) => e.id === escolaId);
+  const fixedEscola = ESCOLAS_MUNICIPAIS.find((ec) => ec.numero === escolaCodigo) ?? null;
+  const selectedEscola = fixedEscola
+    ? schoolData.find((e) => e.nome.toUpperCase() === fixedEscola.nome) ?? null
+    : null;
   const selectedTurma = selectedEscola?.turmas.find((t) => t.id === turmaId);
 
   const turmaAlunos = useMemo(() => {
@@ -49,8 +53,12 @@ export default function StudentLoginForm() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!escolaId) {
+    if (escolaCodigo === "") {
       setError("Selecione a sua escola.");
+      return;
+    }
+    if (!selectedEscola) {
+      setError("Sua escola ainda não tem turmas cadastradas. Procure a coordenação.");
       return;
     }
     if (!turmaId) {
@@ -91,9 +99,9 @@ export default function StudentLoginForm() {
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">Escola</label>
         <select
-          value={escolaId}
+          value={escolaCodigo}
           onChange={(e) => {
-            setEscolaId(e.target.value);
+            setEscolaCodigo(e.target.value === "" ? "" : Number(e.target.value));
             setTurmaId("");
             setAlunoId("");
             setError("");
@@ -103,9 +111,9 @@ export default function StudentLoginForm() {
           <option value="" disabled>
             Selecione a escola
           </option>
-          {schoolData.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.nome}
+          {ESCOLAS_MUNICIPAIS.map((ec) => (
+            <option key={ec.numero} value={ec.numero}>
+              {escolaLabel(ec)}
             </option>
           ))}
         </select>
@@ -124,7 +132,11 @@ export default function StudentLoginForm() {
           className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
         >
           <option value="" disabled>
-            {selectedEscola ? "Selecione a turma" : "Escolha a escola primeiro"}
+            {!fixedEscola
+              ? "Escolha a escola primeiro"
+              : !selectedEscola
+                ? "Escola ainda sem turmas cadastradas"
+                : "Selecione a turma"}
           </option>
           {selectedEscola?.turmas.map((t) => (
             <option key={t.id} value={t.id}>

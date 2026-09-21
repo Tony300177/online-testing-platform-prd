@@ -12,34 +12,13 @@ import {
   UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ESCOLAS_MUNICIPAIS, escolaLabel } from "@/lib/municipal-schools";
 
 type AlunoItem = { id: string; nome: string; numeroChamada: number | null };
 type TurmaItem = { id: string; nome: string; ano: string; turno: string; professor: string | null; alunos: AlunoItem[] };
 type EscolaItem = { id: string; nome: string; turmas: TurmaItem[] };
 
 type TurmaForm = { nome: string; ano: string; turno: string; professor: string };
-
-const ESCOLAS_MUNICIPAIS: { numero: number; nome: string }[] = [
-  { numero: 1, nome: "CENTRO DE EDUCAÇÃO INFANTIL ARCO IRIS" },
-  { numero: 2, nome: "CENTRO DE EDUCAÇÃO INFANTIL BRUNO LEONARDO DA COSTA CAMPOS" },
-  { numero: 3, nome: "CENTRO DE EDUCAÇÃO INFANTIL CRIANÇA FELIZ" },
-  { numero: 4, nome: "CENTRO DE EDUCAÇÃO INFANTIL DOM FRANCO DALLA VALLE" },
-  { numero: 5, nome: "CENTRO DE EDUCAÇÃO INFANTIL LUIZ FELIPE MARTINS MARQUES LUIZ" },
-  { numero: 6, nome: "CENTRO DE EDUCAÇÃO INFANTIL MENINO JESUS" },
-  { numero: 7, nome: "CENTRO DE EDUCAÇÃO INFANTIL NOSSO LAR" },
-  { numero: 8, nome: "CENTRO DE EDUCAÇÃO MUNICIPAL DR. GUILHERME FREITAS DE ABREU LIMA" },
-  { numero: 9, nome: "CENTRO DE EDUCAÇÃO MUNICIPAL PROFESSOR ORLANDO PEREIRA" },
-  { numero: 10, nome: "CENTRO DE EDUCAÇÃO MUNICIPAL SÃO CRISTÓVÃO" },
-  { numero: 11, nome: "CENTRO DE EDUCAÇÃO MUNICIPAL VASCO PAPA" },
-  { numero: 12, nome: "ESCOLA MUNICIPAL PADRE JOSÉ DE ANCHIETA" },
-  { numero: 13, nome: "ESCOLA MUNICIPAL PAULO FREIRE" },
-  { numero: 14, nome: "ESCOLA MUNICIPAL PROFESSORA MARIA HILDA PANAS" },
-  { numero: 15, nome: "ESCOLA MUNICIPAL RURAL EUCLIDES DA CUNHA" },
-  { numero: 16, nome: "ESCOLA MUNICIPAL VINICIUS DE MORAES" },
-  { numero: 17, nome: "ESCOLA RURAL MUNICIPAL ALVARES DE AZEVEDO" },
-  { numero: 18, nome: "ESCOLA RURAL MUNICIPAL CORA CORALINA" },
-  { numero: 19, nome: "ESCOLA RURAL MUNICIPAL OSVALDO CRUZ" },
-];
 
 export default function CadastroPanel({ initialEscolas }: { initialEscolas: EscolaItem[] }) {
   const [escolas, setEscolas] = useState<EscolaItem[]>(initialEscolas);
@@ -217,7 +196,7 @@ export default function CadastroPanel({ initialEscolas }: { initialEscolas: Esco
                 </option>
                 {ESCOLAS_MUNICIPAIS.map((ec) => (
                   <option key={ec.numero} value={ec.numero}>
-                    {String(ec.numero).padStart(2, "0")} | {ec.nome}
+                    {escolaLabel(ec)}
                   </option>
                 ))}
               </select>

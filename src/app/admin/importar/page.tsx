@@ -14,9 +14,10 @@ export default async function AdminImportarPage() {
           <UploadCloud className="h-6 w-6" />
         </span>
         <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Gestão de cadastros</p>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Importação de planilha</h1>
           <p className="text-sm text-slate-500">
-            Importe a planilha da secretaria (Vasco Papa) com alunos, turmas, professores e escolas.
+            Envie a planilha da secretaria (um único arquivo com todas as escolas); opcionalmente filtre por escola, valide e confirme a importação no Supabase.
           </p>
         </div>
       </div>

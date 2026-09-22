@@ -4,6 +4,7 @@ import { db } from "@/db";
 import {
   alunos,
   alternativas,
+  aplicacoes,
   escolas,
   matriculas,
   provas,
@@ -89,7 +90,21 @@ export async function POST(req: Request) {
     if (!school) return NextResponse.json({ error: "Informe a sua escola." }, { status: 400 });
   }
 
-  const [prova] = await db.select().from(provas).where(eq(provas.codigo, codigo)).limit(1);
+  const [provaEncontrada] = await db.select().from(provas).where(eq(provas.codigo, codigo)).limit(1);
+
+  // Código de aplicação: resolve a réplica da aplicação para a turma do aluno
+  let prova = provaEncontrada;
+  if (!prova) {
+    const [aplicacao] = await db.select().from(aplicacoes).where(eq(aplicacoes.codigo, codigo)).limit(1);
+    if (aplicacao && turmaId) {
+      [prova] = await db
+        .select()
+        .from(provas)
+        .where(and(eq(provas.aplicacaoId, aplicacao.id), eq(provas.turmaId, turmaId)))
+        .limit(1);
+    }
+  }
+
   if (!prova || prova.status === "draft") {
     return NextResponse.json({ error: "Prova não encontrada." }, { status: 404 });
   }

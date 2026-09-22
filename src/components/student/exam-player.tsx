@@ -89,6 +89,7 @@ export default function ExamPlayer({ code }: { code: string }) {
     senha: "",
   });
   const [schoolData, setSchoolData] = useState<SchoolOption[]>([]);
+  const [appMode, setAppMode] = useState(false);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
@@ -106,6 +107,9 @@ export default function ExamPlayer({ code }: { code: string }) {
   const storageKey = `${STORAGE_KEY_PREFIX}${code.toUpperCase()}`;
 
   const hasPdf = Boolean(exam?.arquivoNome);
+  const pdfUrl = appMode && identify.turmaId
+    ? `/api/prova/${encodeURIComponent(code)}/pdf?turmaId=${encodeURIComponent(identify.turmaId)}`
+    : `/api/prova/${encodeURIComponent(code)}/pdf`;
 
   // Carrega a prova
   useEffect(() => {
@@ -141,7 +145,16 @@ export default function ExamPlayer({ code }: { code: string }) {
           return;
         }
         setExam(data.exam);
-        setQuestions(data.questions);
+        if (Array.isArray(data.escolas)) {
+          setAppMode(true);
+          setSchoolData(data.escolas);
+        }
+        if (!Array.isArray(data.escolas) && data.aplicacao) {
+          setAppMode(true);
+        }
+        if (Array.isArray(data.questions)) {
+          setQuestions(data.questions);
+        }
         if (data.aluno) {
           // Aluno logado: identidade vem da sessão, sem etapa de identificação
           setIdentify({
@@ -169,6 +182,7 @@ export default function ExamPlayer({ code }: { code: string }) {
 
   // Carrega as escolas/turmas/alunos reais para a identificação
   useEffect(() => {
+    if (appMode) return;
     let cancelled = false;
     fetch("/api/escolas")
       .then((res) => res.json())
@@ -181,7 +195,7 @@ export default function ExamPlayer({ code }: { code: string }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [appMode]);
 
   const selectedEscola = schoolData.find((e) => e.id === identify.escolaId);
   const selectedTurma = selectedEscola?.turmas.find((t) => t.id === identify.turmaId);
@@ -330,6 +344,42 @@ export default function ExamPlayer({ code }: { code: string }) {
       setVerifying(false);
       return;
     }
+
+    // Aplicação: as questões são específicas da réplica da turma do aluno.
+    if (appMode && questions.length === 0) {
+      try {
+        const res = await fetch(
+          `/api/prova/${encodeURIComponent(code)}?turmaId=${encodeURIComponent(aluno.turmaId)}&alunoId=${encodeURIComponent(aluno.id)}`
+        );
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          setError(data.error ?? "Não foi possível carregar a prova da sua turma.");
+          setVerifying(false);
+          return;
+        }
+        if (data.alreadySubmitted && data.result) {
+          localStorage.removeItem(storageKey);
+          setResult(data.result);
+          setAlreadyDone(true);
+          setVerifying(false);
+          setStage("done");
+          window.scrollTo({ top: 0 });
+          return;
+        }
+        if (data.closed) {
+          setStage("closed");
+          setVerifying(false);
+          return;
+        }
+        setExam(data.exam);
+        if (Array.isArray(data.questions)) setQuestions(data.questions);
+      } catch {
+        setError("Erro de conexão ao carregar a prova. Tente novamente.");
+        setVerifying(false);
+        return;
+      }
+    }
+
     setVerifying(false);
     setIdentify((prev) => ({
       ...prev,
@@ -870,7 +920,7 @@ export default function ExamPlayer({ code }: { code: string }) {
             <div className="grid items-start gap-6 lg:grid-cols-[2.33fr_1fr]">
               <div className={cn("lg:block", mobileTab !== "pdf" && "hidden")}>
                 <div className="lg:sticky lg:top-24">
-                  <PdfViewer url={`/api/prova/${encodeURIComponent(code)}/pdf`} title={exam?.arquivoNome ?? undefined} />
+                  <PdfViewer url={pdfUrl} title={exam?.arquivoNome ?? undefined} />
                 </div>
               </div>
               <div className={cn("lg:block", mobileTab !== "gabarito" && "hidden")}>

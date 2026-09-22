@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
-import { and, eq, ilike, lt, or } from "drizzle-orm";
+import { and, eq, ilike, isNull, lt, or } from "drizzle-orm";
 import { db } from "@/db";
 import { provas } from "@/db/schema";
 import { getSessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+// Réplicas de aplicações nunca são removidas por limpeza automática.
 const condicao = () =>
-  or(
-    ilike(provas.titulo, "%teste%"),
-    eq(provas.status, "finished"),
-    lt(provas.dataFim, new Date())
+  and(
+    isNull(provas.aplicacaoId),
+    or(
+      ilike(provas.titulo, "%teste%"),
+      eq(provas.status, "finished"),
+      lt(provas.dataFim, new Date())
+    )
   );
 
 export async function POST() {
@@ -35,7 +39,7 @@ export async function POST() {
 
     const resultado = await db
       .delete(provas)
-      .where(and(condicao()));
+      .where(condicao());
 
     const excluidas = Number(resultado.rowCount ?? 0) || ids.length;
 

@@ -1,19 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import {
-  AlertTriangle,
   ArrowLeft,
-  Building2,
   CheckCircle2,
   Download,
   FileSpreadsheet,
   Loader2,
   Rocket,
   School,
-  Search,
   Upload,
   Users,
   XCircle,
@@ -55,7 +52,6 @@ export default function ImportarAlunosPanel() {
 
   // Escola
   const [escolasData, setEscolasData] = useState<{ id: string; nome: string; turmas: TurmaOption[] }[]>([]);
-  const [busca, setBusca] = useState("");
   const [escolaCodigo, setEscolaCodigo] = useState<number | null>(null);
 
   // Turma
@@ -97,14 +93,6 @@ export default function ImportarAlunosPanel() {
     : null;
 
   const turmasDisponiveis = selectedEscola?.turmas ?? [];
-
-  const escolasFiltradas = useMemo(() => {
-    const q = busca.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    return ESCOLAS_MUNICIPAIS.filter((ec) => {
-      const label = `${escolaLabel(ec)}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      return !q || label.includes(q) || String(ec.numero).includes(q);
-    });
-  }, [busca]);
 
   /* ---------- Baixar modelo da escola ---------- */
   function baixarModelo() {
@@ -269,43 +257,29 @@ export default function ImportarAlunosPanel() {
               Selecione a escola e envie a planilha do seu arquivo desta unidade.
             </p>
 
-            <div className="relative mt-5">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Digite o nome da escola..."
-                className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-              />
-            </div>
-
-            <div className="mt-3 max-h-80 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2">
-              {escolasFiltradas.length === 0 ? (
-                <p className="px-3 py-4 text-center text-sm text-slate-400">Nenhuma escola encontrada.</p>
-              ) : (
-                escolasFiltradas.map((ec) => (
-                  <button
-                    key={ec.numero}
-                    type="button"
-                    onClick={() => {
-                      setEscolaCodigo(ec.numero);
-                      setTurmaId("");
-                      setError("");
-                      setStep("turma");
-                    }}
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition",
-                      escolaCodigo === ec.numero
-                        ? "bg-indigo-50 font-semibold text-indigo-700"
-                        : "text-slate-700 hover:bg-slate-50"
-                    )}
-                  >
-                    <Building2 className="h-4 w-4 shrink-0 text-slate-400" />
-                    <span>{escolaLabel(ec)}</span>
-                  </button>
-                ))
-              )}
-            </div>
+            <select
+              value={escolaCodigo ?? ""}
+              onChange={(e) => {
+                const num = e.target.value === "" ? null : Number(e.target.value);
+                setEscolaCodigo(num);
+                setTurmaId("");
+                setError("");
+                if (num !== null) setStep("turma");
+              }}
+              className="mt-4 w-full cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            >
+              <option value="" disabled>
+                Selecione a unidade escolar
+              </option>
+              {ESCOLAS_MUNICIPAIS.map((ec) => (
+                <option key={ec.numero} value={ec.numero}>
+                  {escolaLabel(ec)}
+                </option>
+              ))}
+            </select>
+            {!fixedEscola && (
+              <p className="mt-3 text-xs text-slate-400">Escolha uma escola acima para liberar o envio da planilha.</p>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -462,7 +436,7 @@ export default function ImportarAlunosPanel() {
               Importar nova planilha
             </button>
             <Link
-              href="/admin/professor/cadastro"
+              href="/professor/cadastro"
               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
             >
               Cadastrar manual

@@ -6,6 +6,8 @@ import { useState, useRef, useEffect } from "react";
 import {
   BarChart3,
   Building2,
+  CalendarClock,
+  CalendarPlus,
   ChevronDown,
   ClipboardList,
   FilePlus2,
@@ -39,21 +41,24 @@ const NAV: NavItem[] = [
       { href: "/admin/alunos/importar", label: "Importar alunos", icon: Users },
     ] 
   },
-  { 
-    label: "Avaliações", 
-    icon: ClipboardList, 
+{
+    label: "Avaliações",
+    icon: ClipboardList,
     children: [
       { href: "/professor", label: "Provas", icon: ClipboardList },
       { href: "/professor/nova", label: "Nova prova", icon: FilePlus2 },
+      { href: "/admin/aplicacoes", label: "Aplicações", icon: CalendarClock },
+      { href: "/admin/aplicacoes/nova", label: "Nova aplicação", icon: CalendarPlus },
       { href: "/admin/respostas", label: "Respostas", icon: ListChecks },
-    ] 
+    ],
   },
   { 
-    label: "Processamento", 
+    label: "Gestão de cadastros", 
     icon: Building2, 
     children: [
       { href: "/professor/cadastro", label: "Cadastro", icon: Building2 },
-      { href: "/admin/importar", label: "Importar", icon: UploadCloud },
+      { href: "/admin/importar", label: "Importação de planilha", icon: UploadCloud },
+      { href: "/admin/avaliacoes/nova", label: "Criar avaliação", icon: FilePlus2 },
     ] 
   },
   { 

@@ -244,6 +244,7 @@ export type ImportReport = {
   validas: number;
   avisos: number;
   erros: number;
+  foraDaEscola?: number;
   itens: ReportItem[];
   resumo: ResumoItem[];
   escrita?: Escrita;
@@ -269,6 +270,46 @@ function findOfficialSchool(codigo: number | null): { numero: number; nome: stri
   return ESCOLAS_MUNICIPAIS.find((e) => e.numero === codigo) ?? null;
 }
 
+/**
+ * Filtra as linhas de uma planilha única da secretaria para a escola selecionada.
+ * Linhas de outras escolas são simplesmente ignoradas (não viram erro). Quando nenhuma
+ * escola é selecionada ("Todas as escolas"), nenhuma linha é removida.
+ */
+function filterRowsBySchool(
+  rows: ImportLine[],
+  escolaCodigo: number | null | undefined
+): { rows: ImportLine[]; ignoradas: number } {
+  if (escolaCodigo === null || escolaCodigo === undefined) return { rows, ignoradas: 0 };
+  const oficial = findOfficialSchool(escolaCodigo);
+  if (!oficial) return { rows, ignoradas: 0 };
+
+  const headers = rows.length > 0 ? Object.keys(rows[0] ?? {}) : [];
+  const headerMap = mapHeaders(headers);
+  const get = (field: ImportField, row: ImportLine): string => {
+    const h = headerMap.get(field);
+    return h ? cleanText(row[h]) : "";
+  };
+
+  let ignoradas = 0;
+  const filtradas = rows.filter((row) => {
+    const codigo = toInt(row[headerMap.get("CODIGO_ESCOLA") ?? ""]);
+    const nome = get("ESCOLA", row).trim().toUpperCase();
+    if (codigo !== null && codigo !== oficial.numero) {
+      ignoradas += 1;
+      return false;
+    }
+    if (codigo === null && nome) {
+      const oficialPeloNome = ESCOLAS_MUNICIPAIS.find((e) => normalize(e.nome) === normalize(nome));
+      if (oficialPeloNome && oficialPeloNome.numero !== oficial.numero) {
+        ignoradas += 1;
+        return false;
+      }
+    }
+    return true;
+  });
+  return { rows: filtradas, ignoradas };
+}
+
 type DbSnapshot = {
   escolas: Escola[];
   professores: Professor[];
@@ -292,7 +333,12 @@ async function loadSnapshot(anoLetivo: number): Promise<DbSnapshot> {
  * Parse + validação de uma planilha
  * ============================================================ */
 
-export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number, escolaDefault?: string): ParsedRow[] {
+export function parseImportRows(
+  rows: ImportLine[],
+  anoLetivoDefault: number,
+  escolaDefault?: string,
+  escolaCodigoSelecionada?: number | null
+): ParsedRow[] {
   const headers = rows.length > 0 ? Object.keys(rows[0] ?? {}) : [];
   const headerMap = mapHeaders(headers);
 
@@ -301,16 +347,60 @@ export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number, es
     return h ? cleanText(row[h]) : "";
   };
 
+  // Escola fixada no passo 1 do wizard (obrigatória): todo o lote é gravado nela.
+  const escolaOficial =
+    escolaCodigoSelecionada !== null && escolaCodigoSelecionada !== undefined
+      ? findOfficialSchool(escolaCodigoSelecionada)
+      : null;
+
   return rows.map((row, i) => {
     const linha = i + 2; // linha 1 é o cabeçalho
     const motivos: string[] = [];
     const avisos: string[] = [];
 
-    const escolaCodigo = toInt(row[headerMap.get("CODIGO_ESCOLA") ?? ""]);
-    const oficial = findOfficialSchool(escolaCodigo);
-    const escola = oficial
-      ? oficial.nome
-      : get("ESCOLA", row).toUpperCase() || (escolaDefault ? escolaDefault.toUpperCase() : "");
+    const escolaCodigoPlanilha = toInt(row[headerMap.get("CODIGO_ESCOLA") ?? ""]);
+    let escolaCodigo: number | null;
+    let escola: string;
+
+    if (escolaOficial) {
+      // Wizard: escola já selecionada — força a escola alvo e valida código + nome da linha.
+      escolaCodigo = escolaOficial.numero;
+      escola = escolaOficial.nome;
+      if (escolaCodigoPlanilha !== null && escolaCodigoPlanilha !== escolaOficial.numero) {
+        motivos.push(
+          `Linha é da escola ${String(escolaCodigoPlanilha).padStart(2, "0")}, mas a selecionada é ${String(escolaOficial.numero).padStart(2, "0")} (${escolaOficial.nome}). Selecione a escola correta ou envie a planilha desta unidade.`
+        );
+      }
+      const nomePlanilhaEscola = get("ESCOLA", row).trim().toUpperCase();
+      if (nomePlanilhaEscola) {
+        const oficialPeloNome = ESCOLAS_MUNICIPAIS.find((e) => normalize(e.nome) === normalize(nomePlanilhaEscola));
+        if (oficialPeloNome && oficialPeloNome.numero !== escolaOficial.numero) {
+          motivos.push(
+            `ESCOLA "${nomePlanilhaEscola}" pertence a outra unidade (${String(oficialPeloNome.numero).padStart(2, "0")}). Linha fora da escola selecionada (${escolaOficial.nome}).`
+          );
+        } else if (!oficialPeloNome && normalize(nomePlanilhaEscola) !== normalize(escolaOficial.nome)) {
+          avisos.push(`Escola no arquivo difere da oficial: "${nomePlanilhaEscola}" → usada "${escolaOficial.nome}"`);
+        }
+      }
+    } else {
+      // Caminho legado: escola vem do CÓDIGO/ESCOLA da própria planilha.
+      const oficial = findOfficialSchool(escolaCodigoPlanilha);
+      escolaCodigo = oficial ? oficial.numero : escolaCodigoPlanilha;
+      escola = oficial
+        ? oficial.nome
+        : get("ESCOLA", row).toUpperCase() || (escolaDefault ? escolaDefault.toUpperCase() : "");
+      if (oficial) {
+        const nomePlanilha = get("ESCOLA", row).trim().toUpperCase();
+        if (nomePlanilha && normalize(nomePlanilha) !== normalize(oficial.nome)) {
+          avisos.push(`Escola no arquivo difere da oficial: "${nomePlanilha}" → usada "${oficial.nome}"`);
+        }
+      } else if (escolaCodigoPlanilha !== null) {
+        motivos.push(`CÓDIGO de escola ${escolaCodigoPlanilha} não consta nas 19 unidades municipais`);
+      } else if (escola.length < 3) {
+        motivos.push("CÓDIGO e/ou ESCOLA ausentes");
+      }
+    }
+
     const turmaRaw = get("TURMA", row).toUpperCase();
     const anoRaw = get("ANO", row);
     const turno = normalizeTurno(get("TURNO", row));
@@ -323,16 +413,6 @@ export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number, es
     const turmaMatch = turmaRaw.match(/^(\d+)\s*[ºo°]?\s*(.*)$/i);
     const ano = normalizeAnoSerie(anoRaw) ?? (turmaMatch ? normalizeAnoSerie(turmaMatch[1]) ?? `${turmaMatch[1]}º Ano` : null) ?? anoRaw;
 
-    if (oficial) {
-      const nomePlanilha = get("ESCOLA", row).trim().toUpperCase();
-      if (nomePlanilha && normalize(nomePlanilha) !== normalize(oficial.nome)) {
-        avisos.push(`Escola no arquivo difere da oficial: "${nomePlanilha}" → usada "${oficial.nome}"`);
-      }
-    } else if (escolaCodigo !== null) {
-      motivos.push(`CÓDIGO de escola ${escolaCodigo} não consta nas 19 unidades municipais`);
-    } else {
-      if (escola.length < 3) motivos.push("CÓDIGO e/ou ESCOLA ausentes");
-    }
     if (turmaRaw.length < 2) motivos.push("TURMA ausente ou muito curta");
     if (!ano || !ano.trim()) motivos.push("ANO ausente ou inválido");
     else if (!(ANOS_SERIES as readonly string[]).includes(ano)) motivos.push(`ANO "${ano}" não permitido`);
@@ -356,8 +436,14 @@ export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number, es
 }
 
 /** Valida contra o estado atual do banco e monta o relatório (sem gravar). */
-export async function validateImport(rows: ImportLine[], anoLetivoDefault = DEFAULT_ANO_LETIVO, escolaDefault?: string): Promise<ImportReport> {
-  const items = parseImportRows(rows, anoLetivoDefault, escolaDefault);
+export async function validateImport(
+  rows: ImportLine[],
+  anoLetivoDefault = DEFAULT_ANO_LETIVO,
+  escolaDefault?: string,
+  escolaCodigoSelecionada?: number | null
+): Promise<ImportReport> {
+  const { rows: rowsFiltradas, ignoradas } = filterRowsBySchool(rows, escolaCodigoSelecionada);
+  const items = parseImportRows(rowsFiltradas, anoLetivoDefault, escolaDefault, escolaCodigoSelecionada);
   const snap = await loadSnapshot(anoLetivoDefault);
 
   const itens: ReportItem[] = [];
@@ -420,12 +506,18 @@ export async function validateImport(rows: ImportLine[], anoLetivoDefault = DEFA
     itens.push({ ...base, status, motivos: [...motivos, ...avisos] });
   }
 
-  return buildReport(itens, items, anoLetivoDefault);
+  return buildReport(itens, items, anoLetivoDefault, undefined, ignoradas);
 }
 
 /** Valida e grava de forma idempotente. */
-export async function commitImport(rows: ImportLine[], anoLetivoDefault = DEFAULT_ANO_LETIVO, escolaDefault?: string): Promise<ImportReport> {
-  const items = parseImportRows(rows, anoLetivoDefault, escolaDefault);
+export async function commitImport(
+  rows: ImportLine[],
+  anoLetivoDefault = DEFAULT_ANO_LETIVO,
+  escolaDefault?: string,
+  escolaCodigoSelecionada?: number | null
+): Promise<ImportReport> {
+  const { rows: rowsFiltradas, ignoradas } = filterRowsBySchool(rows, escolaCodigoSelecionada);
+  const items = parseImportRows(rowsFiltradas, anoLetivoDefault, escolaDefault, escolaCodigoSelecionada);
   const snap = await loadSnapshot(anoLetivoDefault);
 
   const itens: ReportItem[] = [];
@@ -536,10 +628,16 @@ export async function commitImport(rows: ImportLine[], anoLetivoDefault = DEFAUL
     }
   });
 
-  return buildReport(itens, items, anoLetivoDefault, escrita);
+  return buildReport(itens, items, anoLetivoDefault, escrita, ignoradas);
 }
 
-function buildReport(itens: ReportItem[], items: ParsedRow[], anoLetivo: number, escrita?: Escrita): ImportReport {
+function buildReport(
+  itens: ReportItem[],
+  items: ParsedRow[],
+  anoLetivo: number,
+  escrita?: Escrita,
+  foraDaEscola = 0
+): ImportReport {
   const validas = itens.filter((i) => i.status === "ok").length;
   const avisos = itens.filter((i) => i.status === "aviso").length;
   const erros = itens.filter((i) => i.status === "erro").length;
@@ -552,10 +650,11 @@ function buildReport(itens: ReportItem[], items: ParsedRow[], anoLetivo: number,
 
   return {
     ok: erros === 0,
-    total: items.length,
+    total: items.length + foraDaEscola,
     validas,
     avisos,
     erros,
+    foraDaEscola: foraDaEscola > 0 ? foraDaEscola : undefined,
     itens,
     resumo: Array.from(resumo.values()),
     ...(escrita ? { escrita } : {}),

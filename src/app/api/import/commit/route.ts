@@ -16,6 +16,7 @@ export async function POST(req: Request) {
   const rows = Array.isArray(body.rows) ? body.rows : [];
   const anoLetivo = Number.isFinite(Number(body.anoLetivo)) ? Number(body.anoLetivo) : undefined;
   const escola = typeof body.escola === "string" && body.escola.trim() ? body.escola.trim() : undefined;
+  const escolaCodigo = Number.isFinite(Number(body.escolaCodigo)) ? Number(body.escolaCodigo) : undefined;
 
   if (rows.length === 0) {
     return NextResponse.json({ error: "Nenhuma linha para importar." }, { status: 400 });
@@ -24,6 +25,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Máximo de ${MAX_ROWS} linhas por arquivo.` }, { status: 400 });
   }
 
-  const report = await commitImport(rows, anoLetivo, escola);
+  const report = await commitImport(rows, anoLetivo, escola, escolaCodigo);
   return NextResponse.json({ ok: true, report });
 }

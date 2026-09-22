@@ -5,6 +5,7 @@ import {
   integer,
   numeric,
   pgTable,
+  primaryKey,
   serial,
   text,
   timestamp,
@@ -152,9 +153,55 @@ export const provas = pgTable(
     status: text("status").notNull().default("draft"), // "draft" | "active" | "finished"
     codigo: text("codigo").unique(), // código/link de acesso gerado ao publicar
     professorId: integer("professor_id").references(() => users.id),
+    aplicacaoId: integer("aplicacao_id"), // réplica gerada por uma aplicação (FK no banco)
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("provas_status_idx").on(t.status), index("provas_escola_idx").on(t.escolaId)]
+  (t) => [index("provas_status_idx").on(t.status), index("provas_escola_idx").on(t.escolaId), index("provas_aplicacao_idx").on(t.aplicacaoId)]
+);
+
+/** Aplicação: agendamento de uma prova do banco de provas para várias escolas/turmas. */
+export const aplicacoes = pgTable(
+  "aplicacoes",
+  {
+    id: serial("id").primaryKey(),
+    codigo: text("codigo").notNull().unique(), // código/link de acesso da aplicação
+    titulo: text("titulo").notNull(),
+    provaOrigemId: integer("prova_origem_id").references(() => provas.id, { onDelete: "set null" }),
+    dataInicio: timestamp("data_inicio", { withTimezone: true }),
+    dataFim: timestamp("data_fim", { withTimezone: true }),
+    status: text("status").notNull().default("draft"), // "draft" | "active" | "finished"
+    criadoPor: integer("criado_por").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("aplicacoes_status_idx").on(t.status)]
+);
+
+/** Escolas incluídas em uma aplicação. */
+export const aplicacaoEscolas = pgTable(
+  "aplicacao_escolas",
+  {
+    aplicacaoId: integer("aplicacao_id")
+      .notNull()
+      .references(() => aplicacoes.id, { onDelete: "cascade" }),
+    escolaId: uuid("escola_id")
+      .notNull()
+      .references(() => escolas.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.aplicacaoId, t.escolaId] })]
+);
+
+/** Turmas incluídas em uma aplicação. */
+export const aplicacaoTurmas = pgTable(
+  "aplicacao_turmas",
+  {
+    aplicacaoId: integer("aplicacao_id")
+      .notNull()
+      .references(() => aplicacoes.id, { onDelete: "cascade" }),
+    turmaId: uuid("turma_id")
+      .notNull()
+      .references(() => turmas.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.aplicacaoId, t.turmaId] })]
 );
 
 /** Questões de uma prova. */
@@ -246,6 +293,9 @@ export const resultados = pgTable(
 
 export type User = typeof users.$inferSelect;
 export type Prova = typeof provas.$inferSelect;
+export type Aplicacao = typeof aplicacoes.$inferSelect;
+export type AplicacaoTurma = typeof aplicacaoTurmas.$inferSelect;
+export type AplicacaoEscola = typeof aplicacaoEscolas.$inferSelect;
 export type Questao = typeof questoes.$inferSelect;
 export type Alternativa = typeof alternativas.$inferSelect;
 export type RespostaAluno = typeof respostasAlunos.$inferSelect;

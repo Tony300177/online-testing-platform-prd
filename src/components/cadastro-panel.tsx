@@ -176,9 +176,7 @@ export default function CadastroPanel({ initialEscolas }: { initialEscolas: Esco
       )}
 
       {tab === "escola" ? (
-        <div className="grid items-start gap-6 lg:grid-cols-2">
-          {/* Formulário */}
-          <form onSubmit={saveEscola} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <form onSubmit={saveEscola} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="flex items-center gap-2 font-bold text-slate-900">
               <School className="h-5 w-5 text-indigo-600" /> Nova escola
             </h2>
@@ -278,44 +276,6 @@ export default function CadastroPanel({ initialEscolas }: { initialEscolas: Esco
               {busy ? "Cadastrando..." : "Cadastrar escola"}
             </button>
           </form>
-
-          {/* Lista */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="font-bold text-slate-900">Escolas cadastradas</h3>
-            <p className="mt-1 text-xs text-slate-400">Ano letivo 2026</p>
-            {escolas.length === 0 ? (
-              <p className="mt-4 rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">
-                Nenhuma escola cadastrada ainda.
-              </p>
-            ) : (
-              <div className="mt-4 space-y-4">
-                {escolas.map((e) => (
-                  <div key={e.id} className="rounded-xl border border-slate-200 p-4">
-                    <p className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                      <Building2 className="h-4 w-4 text-indigo-600" /> {e.nome}
-                    </p>
-                    {e.turmas.length === 0 ? (
-                      <p className="mt-2 text-xs text-slate-400">Sem turmas.</p>
-                    ) : (
-                      <ul className="mt-2 space-y-1">
-                        {e.turmas.map((t) => (
-                          <li key={t.id} className="flex items-center justify-between text-xs text-slate-600">
-                            <span>
-                              {t.nome} · {t.turno}
-                            </span>
-                            <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-700">
-                              {t.alunos.length} alunos
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       ) : (
         <div className="grid items-start gap-6 lg:grid-cols-2">
           {/* Formulário */}

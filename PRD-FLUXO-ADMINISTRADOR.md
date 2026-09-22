@@ -73,11 +73,7 @@ O objetivo é eliminar o cadastro manual (hoje feito via SQL `sql/banco-escolar-
 O que **já existe** no código:
 
 - **Tabelas** (`src/db/schema.ts`): `escolas`, `turmas`, `alunos`, `matriculas`, `users`, `provas`, `questoes`, `alternativas`, `respostas_alunos`, `resultados`.
-- **Endpoints**: `POST/GET /api/escolas`, `POST /api/alunos`, `GET /api/exports/csv`, `GET /api/exports/pdf`.
-- **Telas admin**: `/admin` (dashboard executivo global), `/admin/dashboard` (dashboard por escola/turma com filtros), `/admin/provas`, `/admin/respostas`.
-- **Seed**: `sql/banco-escolar-ceem-vasco-papa.sql` (109 matrículas, 4 turmas do 5º ano).
-
-### Lacunas em relação ao fluxo proposto
+- **Endpoints**: `POST/GET /api/escolas`, `POST /api/alunos`, `GET /api/exporttudoo proposto
 
 | Item do fluxo | Situação | Necessário |
 |---------------|----------|------------|

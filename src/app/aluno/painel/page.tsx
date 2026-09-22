@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import Logo from "@/components/logo";
 import { db } from "@/db";
-import { provas, resultados } from "@/db/schema";
+import { aplicacoes, provas, resultados } from "@/db/schema";
 import { requireAluno } from "@/lib/auth";
 import { isExamClosed, notYetOpen } from "@/lib/utils";
 import { formatDateTime } from "@/lib/utils";
@@ -32,9 +32,13 @@ function turmaInProva(turma: string, nomeTurma: string): boolean {
 export default async function PainelPage() {
   const session = await requireAluno();
 
-  const list = await db
-    .select()
+  const rows = await db
+    .select({
+      prova: provas,
+      aplicacaoCodigo: aplicacoes.codigo,
+    })
     .from(provas)
+    .leftJoin(aplicacoes, eq(provas.aplicacaoId, aplicacoes.id))
     .where(
       and(
         inArray(provas.status, ["active", "finished"]),
@@ -43,11 +47,11 @@ export default async function PainelPage() {
     )
     .orderBy(desc(provas.createdAt));
 
-  const minhas = list.filter(
-    (p) => p.turmaId === session.turmaId || turmaInProva(p.turma, session.turmaNome)
+  const minhasRows = rows.filter(
+    (r) => r.prova.turmaId === session.turmaId || turmaInProva(r.prova.turma, session.turmaNome)
   );
 
-  const ids = minhas.map((p) => p.id);
+  const ids = minhasRows.map((r) => r.prova.id);
   const res = ids.length
     ? await db
         .select()
@@ -56,6 +60,11 @@ export default async function PainelPage() {
     : [];
   const byProva = new Map<number, (typeof res)[number]>();
   for (const r of res) byProva.set(r.provaId, r);
+
+  const minhas = minhasRows.map(({ prova: p, aplicacaoCodigo }) => ({
+    ...p,
+    codigo: p.codigo ?? aplicacaoCodigo ?? null,
+  }));
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50/70 via-slate-50 to-slate-100">

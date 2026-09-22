@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { count, desc, eq } from "drizzle-orm";
-import { ArrowRight, ClipboardList } from "lucide-react";
+import { count, desc, eq, isNull } from "drizzle-orm";
+import { ArrowRight, ClipboardList, Plus } from "lucide-react";
 import LimparProvasButton from "@/components/admin/limpar-provas-button";
 import { StatusBadge } from "@/app/professor/page";
 import { db } from "@/db";
@@ -24,6 +24,7 @@ export default async function AdminProvasPage() {
     })
     .from(provas)
     .leftJoin(users, eq(users.id, provas.professorId ?? 0))
+    .where(isNull(provas.aplicacaoId))
     .orderBy(desc(provas.createdAt));
 
   const qCounts = await db
@@ -47,7 +48,15 @@ export default async function AdminProvasPage() {
             Visão geral de todas as avaliações criadas pelos professores.
           </p>
         </div>
-        <LimparProvasButton />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/aplicacoes/nova"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
+          >
+            <Plus className="h-4 w-4" /> Nova aplicação
+          </Link>
+          <LimparProvasButton />
+        </div>
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">

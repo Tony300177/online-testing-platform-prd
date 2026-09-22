@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { provas, resultados } from "@/db/schema";
+import { aplicacoes, provas, resultados } from "@/db/schema";
 import { getSessionAluno } from "@/lib/auth";
 import { isExamClosed, notYetOpen } from "@/lib/utils";
 
@@ -12,14 +12,18 @@ function turmaInProva(turma: string, nomeTurma: string): boolean {
     .some((t) => t.toLowerCase() === nomeTurma.toLowerCase());
 }
 
-/** Painel do aluno: provas publicadas para a turma em que ele está matriculado. */
+/** Painel do aluno: provas publicadas para a turma em que ele está matriculado (inclui réplicas de aplicações). */
 export async function GET() {
   const session = await getSessionAluno();
   if (!session) return NextResponse.json({ ok: false, error: "Não autorizado." }, { status: 401 });
 
-  const list = await db
-    .select()
+  const rows = await db
+    .select({
+      prova: provas,
+      aplicacaoCodigo: aplicacoes.codigo,
+    })
     .from(provas)
+    .leftJoin(aplicacoes, eq(provas.aplicacaoId, aplicacoes.id))
     .where(
       and(
         inArray(provas.status, ["active", "finished"]),
@@ -28,11 +32,11 @@ export async function GET() {
     )
     .orderBy(desc(provas.createdAt));
 
-  const minhas = list.filter(
-    (p) => p.turmaId === session.turmaId || turmaInProva(p.turma, session.turmaNome)
+  const minhas = rows.filter(
+    (r) => r.prova.turmaId === session.turmaId || turmaInProva(r.prova.turma, session.turmaNome)
   );
 
-  const ids = minhas.map((p) => p.id);
+  const ids = minhas.map((r) => r.prova.id);
   const res = ids.length
     ? await db.select().from(resultados).where(and(inArray(resultados.provaId, ids), eq(resultados.alunoId, session.aluno.id)))
     : [];
@@ -43,7 +47,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     aluno: { nome: session.aluno.nome, turma: session.turmaNome, escola: session.escolaNome },
-    provas: minhas.map((p) => {
+    provas: minhas.map(({ prova: p, aplicacaoCodigo }) => {
       const resultado = byProva.get(p.id);
       return {
         id: p.id,
@@ -55,7 +59,7 @@ export async function GET() {
         dataFim: p.dataFim ? p.dataFim.toISOString() : null,
         tempoMinutos: p.tempoMinutos,
         status: p.status,
-        codigo: p.codigo,
+        codigo: p.codigo ?? aplicacaoCodigo ?? null,
         arquivoNome: p.arquivoNome,
         closed: isExamClosed(p),
         notOpen: notYetOpen(p),

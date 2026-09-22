@@ -11,14 +11,14 @@ export default async function AlunoPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-indigo-900 via-indigo-700 to-violet-900">
-      <header className="mx-auto w-full max-w-5xl px-4 py-6">
+      <header className="mx-auto w-full max-w-5xl px-4 py-4 sm:py-6">
         <Link href="/" className="inline-flex items-center">
-          <Logo className="h-16 w-auto" />
+          <Logo className="h-12 w-auto sm:h-16" />
         </Link>
       </header>
 
-      <main className="flex flex-1 items-center justify-center px-4 pb-16">
-        <div className="grid w-full max-w-4xl items-center gap-8 lg:grid-cols-2">
+      <main className="flex flex-1 items-center justify-center overflow-y-auto px-4 pb-10 sm:pb-16">
+        <div className="my-auto grid w-full max-w-4xl items-center gap-6 lg:grid-cols-2 sm:gap-8">
           <div className="hidden flex-col justify-center lg:flex">
             <span className="inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-sm font-medium text-white">
               <UserRound className="h-4 w-4" /> Acesso do aluno
@@ -33,13 +33,13 @@ export default async function AlunoPage() {
               pode entrar direto com o código da prova fornecido pelo professor.
             </p>
           </div>
-          <div className="rounded-2xl bg-white p-8 shadow-2xl shadow-indigo-950/30">
+          <div className="rounded-2xl bg-white p-5 shadow-2xl shadow-indigo-950/30 sm:p-8">
             <AlunoAccessCard />
           </div>
         </div>
       </main>
 
-      <footer className="mx-auto w-full max-w-5xl px-4 pb-6">
+      <footer className="mx-auto w-full max-w-5xl px-4 pb-4 sm:pb-6">
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-sm font-semibold text-indigo-100 transition hover:text-white"

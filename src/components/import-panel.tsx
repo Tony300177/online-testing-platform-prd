@@ -296,7 +296,7 @@ export default function ImportPanel() {
       >
         <FileSpreadsheet className="h-10 w-10 text-indigo-500" />
         <p className="text-sm font-semibold text-slate-700">
-          {file ? file.name : "Arraste a planilha do Vasco Papa ou clique para selecionar"}
+          {file ? file.name : "Arraste a planilha ou clique para selecionar o arquivo"}
         </p>
         <p className="text-xs text-slate-400">Aceita .xlsx e .xls · máximo 5.000 linhas</p>
         {file && (

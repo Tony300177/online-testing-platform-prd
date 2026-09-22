@@ -258,7 +258,7 @@ export default function ImportarAlunosPanel() {
         <ArrowLeft className="h-3.5 w-3.5" /> Alterar escola
       </button>
 
-      {/* ============ PASSOS 1 e 2: seleção de escola ============ */}
+      {/* ============ PASSOS 1 e 2: seleção de escola + arquivo ============ */}
       {(step === "escola" || step === "turma") && (
         <div className="grid items-start gap-6 lg:grid-cols-2">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -266,7 +266,7 @@ export default function ImportarAlunosPanel() {
               <School className="h-5 w-5 text-indigo-600" /> Selecionar escola
             </h2>
             <p className="mt-1 text-xs text-slate-400">
-              Escolha a unidade escolar. A planilha só aceitará turmas desta escola.
+              Selecione a escola e envie a planilha do seu arquivo desta unidade.
             </p>
 
             <div className="relative mt-5">
@@ -291,6 +291,7 @@ export default function ImportarAlunosPanel() {
                       setEscolaCodigo(ec.numero);
                       setTurmaId("");
                       setError("");
+                      setStep("turma");
                     }}
                     className={cn(
                       "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition",
@@ -326,7 +327,7 @@ export default function ImportarAlunosPanel() {
               </div>
             )}
 
-            {step === "turma" && selectedEscola && (
+            {fixedEscola && selectedEscola && (
               <>
                 <div className="rounded-2xl border border-slate-200 bg-white p-5">
                   <label className="mb-1 block text-sm font-semibold text-slate-700">Turma</label>
@@ -418,17 +419,6 @@ export default function ImportarAlunosPanel() {
                   </button>
                 )}
               </>
-            )}
-
-            {step === "escola" && (
-              <button
-                type="button"
-                disabled={!fixedEscola}
-                onClick={() => setStep("turma")}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Continuar <ChevronRight />
-              </button>
             )}
           </div>
         </div>
@@ -636,13 +626,5 @@ function ResultStat({ label, value }: { label: string; value: number }) {
       <p className="text-lg font-extrabold text-slate-900">{value}</p>
       <p className="text-xs font-medium text-slate-500">{label}</p>
     </div>
-  );
-}
-
-function ChevronRight({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

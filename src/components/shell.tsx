@@ -36,6 +36,7 @@ const NAV: NavItem[] = [
     children: [
       { href: "/admin/dashboard", label: "Turma/Escola", icon: School },
       { href: "/admin/alunos", label: "Alunos", icon: Users },
+      { href: "/admin/alunos/importar", label: "Importar alunos", icon: Users },
     ] 
   },
   { 

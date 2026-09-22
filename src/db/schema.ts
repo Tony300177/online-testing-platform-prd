@@ -78,6 +78,7 @@ export const alunos = pgTable(
     nome: text("nome").notNull(),
     matricula: text("matricula"),
     numeroChamada: integer("numero_chamada"),
+    cpf: text("cpf"), // chave de dedupe da importação (opcional)
     sexo: text("sexo"), // "Masculino" | "Feminino"
     etnia: text("etnia"), // IBGE: Branca | Preta | Parda | Amarela | Indígena
     bairro: text("bairro"),
@@ -85,7 +86,12 @@ export const alunos = pgTable(
     senhaHash: text("senha_hash"), // login do aluno: hash bcrypt da senha (padrão compartilhado)
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("alunos_nome_idx").on(t.nome), index("alunos_etnia_idx").on(t.etnia), index("alunos_bairro_idx").on(t.bairro)]
+  (t) => [
+    index("alunos_nome_idx").on(t.nome),
+    index("alunos_cpf_idx").on(t.cpf),
+    index("alunos_etnia_idx").on(t.etnia),
+    index("alunos_bairro_idx").on(t.bairro),
+  ]
 );
 
 /** Matrículas: liga o aluno à turma em um ano letivo. */

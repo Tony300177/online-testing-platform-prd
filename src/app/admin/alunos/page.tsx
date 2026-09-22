@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileDown, FileText, Users } from "lucide-react";
+import { FileDown, FileText, Upload, UserPlus, Users } from "lucide-react";
 import FiltrosBar from "@/components/admin/filtros-bar";
 import { fetchAlunosDetalhados, fetchOpcoesFiltros, parseAlunoFilters } from "@/lib/admin";
 import { requireUser } from "@/lib/auth";
@@ -35,7 +35,19 @@ export default async function AdminAlunosPage({
             Base escolar com filtros por turma, etnia, gênero, bairro e professor.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/alunos/importar"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500"
+          >
+            <Upload className="h-3.5 w-3.5" /> Importar alunos
+          </Link>
+          <Link
+            href="/professor/cadastro"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
+          >
+            <UserPlus className="h-3.5 w-3.5" /> Cadastrar aluno
+          </Link>
           <Link
             href={exportHref}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"

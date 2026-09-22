@@ -1,0 +1,494 @@
+import bcrypt from "bcryptjs";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db";
+import {
+  alunos,
+  matriculas,
+  turmas,
+  type Aluno,
+  type Matricula,
+  type Turma,
+} from "@/db/schema";
+import { STUDENT_DEFAULT_PASSWORD } from "@/lib/auth";
+import { normalize } from "@/lib/utils";
+
+const DEFAULT_ANO_LETIVO = 2026;
+
+/* ============================================================
+ * Cabeçalhos aceitos por campo (comparação normalizada)
+ * ============================================================ */
+
+const HEADER_ALIASES: Record<string, string[]> = {
+  NUMERO_CHAMADA: ["Nº", "N", "NUMERO", "NUMERO CHAMADA", "Nº CHAMADA", "CHAMADA"],
+  NOME: ["NOME DO ALUNO", "NOME", "ALUNO", "NOME COMPLETO"],
+  CPF: ["CPF", "CPF DO ALUNO"],
+  DATA_NASCIMENTO: ["DATA DE NASCIMENTO", "DATA NASCIMENTO", "NASCIMENTO", "DT NASCIMENTO", "DATA"],
+  TURMA: ["TURMA", "NOME DA TURMA", "CLASSE", "SALA"],
+  TURNO: ["TURNO", "PERIODO", "PERÍODO", "TURNO AULA"],
+};
+
+export const ALUNO_FIELDS = ["NUMERO_CHAMADA", "NOME", "CPF", "DATA_NASCIMENTO", "TURMA", "TURNO"] as const;
+export type AlunoImportField = (typeof ALUNO_FIELDS)[number];
+
+export function normalizeHeader(value: string): string {
+  return value
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[ºª]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function mapHeaders(headers: string[]): Map<AlunoImportField, string> {
+  const map = new Map<AlunoImportField, string>();
+  const aliasIndex = new Map<string, AlunoImportField>();
+  for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
+    for (const a of aliases) aliasIndex.set(normalizeHeader(a), field as AlunoImportField);
+  }
+  for (const h of headers) {
+    const field = aliasIndex.get(normalizeHeader(h));
+    if (field && !map.has(field)) map.set(field, h);
+  }
+  return map;
+}
+
+const KNOWN_HEADERS = new Set(
+  Object.values(HEADER_ALIASES)
+    .flat()
+    .map((a) => normalizeHeader(a))
+);
+
+/** Deteta a linha de cabeçalho em planilhas com linhas de título. */
+export function detectAlunoHeaderRowIndex(rows: unknown[][]): number {
+  for (let i = 0; i < Math.min(rows.length, 12); i++) {
+    const cells = rows[i];
+    if (!cells || cells.length === 0) continue;
+    const hits = cells.filter(
+      (c) => typeof c === "string" && c.trim() !== "" && KNOWN_HEADERS.has(normalizeHeader(String(c)))
+    ).length;
+    if (hits >= 3) return i;
+  }
+  return 0;
+}
+
+/* ============================================================
+ * Helpers de normalização
+ * ============================================================ */
+
+export function cleanCPF(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "";
+  return String(value).replace(/\D/g, "");
+}
+
+export function isCPFValid(cpf: string): boolean {
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+  const calc = (len: number) => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += Number(cpf[i]) * (len + 1 - i);
+    let rest = (sum * 10) % 11;
+    if (rest === 10) rest = 0;
+    return rest;
+  };
+  return calc(9) === Number(cpf[9]) && calc(10) === Number(cpf[10]);
+}
+
+function cleanDates(value: string | number | null | undefined): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") {
+    // Número serial do Excel (data a partir de 01/01/1900)
+    const d = new Date(Math.round((value - 25569) * 86400000));
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return null;
+  }
+  const s = String(value).trim();
+  if (!s) return null;
+  const dmy = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (dmy) {
+    const [_, dd, mm, yyyy] = dmy;
+    const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return null;
+  }
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    const [_, yyyy, mm, dd] = iso;
+    const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  return null;
+}
+
+function cleanText(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
+/** Converte "yyyy-mm-dd" (ou Date) para Date usado nos inserts do drizzle. */
+function toDate(value: string | Date | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+/* ============================================================
+ * Tipos
+ * ============================================================ */
+
+export type ImportAlunoLine = Record<string, string | number | null | undefined>;
+
+export type ParsedAlunoRow = {
+  linha: number;
+  nome: string;
+  cpf: string | null;
+  dataNascimento: string | null;
+  numeroChamada: number | null;
+  turma: string;
+  turno: string | null;
+  anoLetivo: number;
+  motivos: string[];
+  avisos: string[];
+};
+
+export type AlunoReportItem = {
+  linha: number;
+  status: "ok" | "aviso" | "erro";
+  nome: string;
+  cpf: string | null;
+  turma: string;
+  turno: string;
+  motivos: string[];
+};
+
+export type AlunoResumoTurma = {
+  turma: string;
+  ano: string;
+  turno: string;
+  quantidade: number;
+};
+
+export type AlunoEscrita = {
+  alunosCriados: number;
+  alunosAtualizados: number;
+  matriculasCriadas: number;
+  jaCadastrados: number;
+  ignorados: number;
+};
+
+export type AlunoImportReport = {
+  ok: boolean;
+  total: number;
+  validas: number;
+  avisos: number;
+  erros: number;
+  itens: AlunoReportItem[];
+  resumo: AlunoResumoTurma[];
+  escrita?: AlunoEscrita;
+};
+
+export type AlunoImportOptions = {
+  escolaId: string;
+  turmaId?: string;
+  anoLetivo?: number;
+};
+
+/* ============================================================
+ * Parse
+ * ============================================================ */
+
+export function parseAlunoRows(rows: ImportAlunoLine[], options: AlunoImportOptions): ParsedAlunoRow[] {
+  const headers = rows.length > 0 ? Object.keys(rows[0] ?? {}) : [];
+  const headerMap = mapHeaders(headers);
+  const get = (field: AlunoImportField, row: ImportAlunoLine): string => {
+    const h = headerMap.get(field);
+    return h ? cleanText(row[h]) : "";
+  };
+
+  const anoLetivo = options.anoLetivo ?? DEFAULT_ANO_LETIVO;
+
+  return rows.map((row, i) => {
+    const linha = i + 2;
+    const motivos: string[] = [];
+    const avisos: string[] = [];
+
+    const nome = get("NOME", row).toUpperCase();
+    const cpfRaw = cleanCPF(row[headerMap.get("CPF") ?? ""]);
+    const dataNascimento = cleanDates(row[headerMap.get("DATA_NASCIMENTO") ?? ""]);
+    const numeroChamadaRaw = get("NUMERO_CHAMADA", row);
+    const turma = get("TURMA", row).toUpperCase();
+    const turnoRaw = get("TURNO", row);
+
+    const numeroChamada =
+      numeroChamadaRaw === "" || !/^\d+$/.test(numeroChamadaRaw)
+        ? null
+        : Number(numeroChamadaRaw);
+
+    if (nome.length < 3) motivos.push("NOME do aluno ausente ou muito curto");
+    if (cpfRaw && cpfRaw.length !== 11) motivos.push(`CPF "${cpfRaw}" incompleto (esperado 11 dígitos)`);
+    else if (cpfRaw && cpfRaw.length === 11 && !isCPFValid(cpfRaw)) motivos.push(`CPF "${cpfRaw}" inválido`);
+    if (dataNascimento === null && cleanText(row[headerMap.get("DATA_NASCIMENTO") ?? ""]).trim() !== "") {
+      motivos.push("DATA DE NASCIMENTO inválida");
+    }
+
+    if (!turma && !options.turmaId) motivos.push("TURMA ausente");
+
+    return {
+      linha,
+      nome,
+      cpf: cpfRaw || null,
+      dataNascimento,
+      numeroChamada,
+      turma,
+      turno: turnoRaw ? turnoRaw.toUpperCase() : null,
+      anoLetivo,
+      motivos,
+      avisos: [],
+    };
+  });
+}
+
+/* ============================================================
+ * Snapshot do banco (turmas da escola + alunos + matrículas)
+ * ============================================================ */
+
+type AlunoSnapshot = {
+  turmas: Turma[];
+  alunos: Aluno[];
+  matriculas: Matricula[];
+};
+
+async function loadAlunoSnapshot(escolaId: string, anoLetivo: number): Promise<AlunoSnapshot> {
+  const turmasRows = await db.select().from(turmas).where(and(eq(turmas.escolaId, escolaId), eq(turmas.anoLetivo, anoLetivo)));
+  const turmaIds = turmasRows.map((t) => t.id);
+  const [alunosRows, matriculasRows] = await Promise.all([
+    db.select().from(alunos),
+    turmaIds.length > 0
+      ? db.select().from(matriculas).where(eq(matriculas.anoLetivo, anoLetivo))
+      : Promise.resolve([] as Matricula[]),
+  ]);
+  const filteredMatriculas = turmaIds.length > 0 ? matriculasRows.filter((m) => turmaIds.includes(m.turmaId)) : [];
+  return { turmas: turmasRows, alunos: alunosRows, matriculas: filteredMatriculas };
+}
+
+function findTurmaNoEscola(turmasRows: Turma[], nome: string): Turma | null {
+  return turmasRows.find((t) => normalize(t.nome) === normalize(nome)) ?? null;
+}
+
+function findAlunoPorCPF(alunosRows: Aluno[], cpf: string): Aluno | null {
+  if (!cpf) return null;
+  return alunosRows.find((a) => a.cpf === cpf) ?? null;
+}
+
+function findAlunoPorNome(alunosRows: Aluno[], nome: string): Aluno | null {
+  return alunosRows.find((a) => normalize(a.nome) === normalize(nome)) ?? null;
+}
+
+/* ============================================================
+ * Validação
+ * ============================================================ */
+
+export async function validateAlunoImport(rows: ImportAlunoLine[], options: AlunoImportOptions): Promise<AlunoImportReport> {
+  const items = parseAlunoRows(rows, options);
+  const snap = await loadAlunoSnapshot(options.escolaId, options.anoLetivo ?? DEFAULT_ANO_LETIVO);
+
+  const itens: AlunoReportItem[] = [];
+  const resumoMap = new Map<string, AlunoResumoTurma>();
+
+  for (const item of items) {
+    const motivos = [...item.motivos];
+    const avisos: string[] = [];
+
+    // Bloqueio de escola incorreta: turma precisa pertencer à escola selecionada.
+    let turmaRow: Turma | null = null;
+    if (!options.turmaId) {
+      turmaRow = findTurmaNoEscola(snap.turmas, item.turma);
+      if (!turmaRow && motivos.length === 0) {
+        motivos.push(`A turma "${item.turma}" não pertence à escola selecionada`);
+      }
+    } else {
+      turmaRow = snap.turmas.find((t) => t.id === options.turmaId) ?? null;
+      if (turmaRow && item.turma && normalize(turmaRow.nome) !== normalize(item.turma)) {
+        avisos.push(`Turma no arquivo ("${item.turma}") difere da turma selecionada ("${turmaRow.nome}") — usada a selecionada`);
+      }
+    }
+
+    const status: AlunoReportItem["status"] = motivos.length > 0 ? "erro" : "ok";
+    itens.push({
+      linha: item.linha,
+      status,
+      nome: item.nome,
+      cpf: item.cpf,
+      turma: options.turmaId && turmaRow ? turmaRow.nome : item.turma,
+      turno: item.turno ?? "",
+      motivos: motivos.length > 0 ? motivos : avisos.length > 0 ? avisos : [],
+    });
+
+    if (status === "erro") continue;
+
+    if (turmaRow) {
+      const key = `${turmaRow.nome}|${turmaRow.ano}|${turmaRow.turno}`;
+      const prev = resumoMap.get(key) ?? { turma: turmaRow.nome, ano: turmaRow.ano, turno: turmaRow.turno, quantidade: 0 };
+      prev.quantidade += 1;
+      resumoMap.set(key, prev);
+    }
+  }
+
+  return buildAlunoReport(itens, items, resumoMap);
+}
+
+/* ============================================================
+ * Commit
+ * ============================================================ */
+
+export async function commitAlunoImport(rows: ImportAlunoLine[], options: AlunoImportOptions): Promise<AlunoImportReport> {
+  const items = parseAlunoRows(rows, options);
+  const anoLetivo = options.anoLetivo ?? DEFAULT_ANO_LETIVO;
+  const snap = await loadAlunoSnapshot(options.escolaId, anoLetivo);
+
+  const escrita: AlunoEscrita = {
+    alunosCriados: 0,
+    alunosAtualizados: 0,
+    matriculasCriadas: 0,
+    jaCadastrados: 0,
+    ignorados: 0,
+  };
+
+  const resumoMap = new Map<string, AlunoResumoTurma>();
+
+  // Linhas ignoradas no commit (erros de parse ou turma fora da escola).
+  let continuaIgnorados = 0;
+
+  await db.transaction(async (tx) => {
+    for (const item of items) {
+      const motivos = [...item.motivos];
+
+      // ---- Turma (bloqueio de escola incorreta) ----
+      let turmaRow: Turma | null = null;
+      if (options.turmaId) {
+        turmaRow = snap.turmas.find((t) => t.id === options.turmaId) ?? null;
+      } else {
+        turmaRow = findTurmaNoEscola(snap.turmas, item.turma);
+        if (!turmaRow && motivos.length === 0) {
+          motivos.push(`A turma "${item.turma}" não pertence à escola selecionada`);
+        }
+      }
+
+      // Linha com erro: registra e não grava.
+      if (motivos.length > 0) {
+        continuaIgnorados++;
+        continue;
+      }
+
+      // ---- Aluno (dedupe por CPF, fallback nome) ----
+      let aluno = item.cpf ? findAlunoPorCPF(snap.alunos, item.cpf) : null;
+      if (!aluno) aluno = findAlunoPorNome(snap.alunos, item.nome);
+
+      const senhaHash = bcrypt.hashSync(STUDENT_DEFAULT_PASSWORD, 10);
+      let alunoId: string;
+
+      if (aluno) {
+        const patch: Partial<typeof alunos.$inferInsert> = {};
+        if (item.cpf && aluno.cpf !== item.cpf) patch.cpf = item.cpf;
+        const dataNova = toDate(item.dataNascimento);
+        const dataAtual = aluno.dataNascimento instanceof Date ? aluno.dataNascimento : toDate(String(aluno.dataNascimento ?? ""));
+        if (dataNova && (!dataAtual || dataAtual.getTime() !== dataNova.getTime())) {
+          patch.dataNascimento = dataNova;
+        }
+        if (item.numeroChamada !== null && aluno.numeroChamada === null) patch.numeroChamada = item.numeroChamada;
+        if (!aluno.senhaHash) patch.senhaHash = senhaHash;
+        if (Object.keys(patch).length > 0) {
+          await tx.update(alunos).set(patch).where(eq(alunos.id, aluno.id));
+          aluno = { ...aluno, ...patch };
+        }
+        alunoId = aluno.id;
+      } else {
+        const [novo] = await tx
+          .insert(alunos)
+          .values({
+            nome: item.nome,
+            cpf: item.cpf ?? undefined,
+            dataNascimento: toDate(item.dataNascimento) ?? undefined,
+            numeroChamada: item.numeroChamada ?? undefined,
+            matricula: null,
+            senhaHash,
+          })
+          .returning();
+        snap.alunos.push(novo);
+        escrita.alunosCriados += 1;
+        alunoId = novo.id;
+      }
+
+      // ---- Matrícula (idempotente: aluno + turma + ano letivo) ----
+      const matriculaExistente = snap.matriculas.find(
+        (m) => m.alunoId === alunoId && m.turmaId === turmaRow!.id && m.anoLetivo === anoLetivo
+      );
+      if (matriculaExistente) {
+        escrita.jaCadastrados += 1;
+      } else {
+        await tx.insert(matriculas).values({
+          alunoId,
+          turmaId: turmaRow!.id,
+          anoLetivo,
+          status: "ativo",
+        });
+        snap.matriculas.push({
+          id: "tmp",
+          alunoId,
+          turmaId: turmaRow!.id,
+          anoLetivo,
+          status: "ativo",
+          createdAt: new Date(),
+        });
+        escrita.matriculasCriadas += 1;
+        if (aluno) escrita.alunosAtualizados += 1;
+      }
+
+      const key = `${turmaRow!.nome}|${turmaRow!.ano}|${turmaRow!.turno}`;
+      const prev = resumoMap.get(key) ?? { turma: turmaRow!.nome, ano: turmaRow!.ano, turno: turmaRow!.turno, quantidade: 0 };
+      prev.quantidade += 1;
+      resumoMap.set(key, prev);
+    }
+  });
+
+  // Reporte pós-commit
+  escrita.ignorados = continuaIgnorados;
+  const itens: AlunoReportItem[] = items.map((item) => {
+    const err = item.motivos.length > 0;
+    return {
+      linha: item.linha,
+      status: err ? "erro" : "ok",
+      nome: item.nome,
+      cpf: item.cpf,
+      turma: item.turma,
+      turno: item.turno ?? "",
+      motivos: item.motivos,
+    };
+  });
+
+  return buildAlunoReport(itens, items, resumoMap, escrita);
+}
+
+function buildAlunoReport(
+  itens: AlunoReportItem[],
+  items: ParsedAlunoRow[],
+  resumo: Map<string, AlunoResumoTurma>,
+  escrita?: AlunoEscrita
+): AlunoImportReport {
+  const validas = itens.filter((i) => i.status === "ok").length;
+  const avisos = itens.filter((i) => i.status === "aviso").length;
+  const erros = itens.filter((i) => i.status === "erro").length;
+
+  return {
+    ok: erros === 0,
+    total: items.length,
+    validas,
+    avisos,
+    erros,
+    itens,
+    resumo: Array.from(resumo.values()),
+    ...(escrita ? { escrita } : {}),
+  };
+}

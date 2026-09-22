@@ -17,6 +17,7 @@ export async function POST(req: Request) {
 
   const body = (await req.json().catch(() => null)) ?? {};
   const nome = typeof body.nome === "string" ? body.nome.trim() : "";
+  const tipo = typeof body.tipo === "string" && body.tipo.trim() ? body.tipo.trim() : null;
   const codigoInput = Number.isFinite(Number(body.codigo)) && Number(body.codigo) > 0 ? Math.trunc(Number(body.codigo)) : null;
   const turmasInput = Array.isArray(body.turmas) ? (body.turmas as TurmaInput[]) : [];
 
@@ -42,10 +43,30 @@ export async function POST(req: Request) {
   const escolaCodigo = codigoInput ?? (maxEscola?.m ?? 0) + 1;
   let turmaCodigo = (maxTurma?.m ?? 0) + 1;
 
-  const { id: escolaId } = await db.transaction(async (tx) => {
+  const { id: escolaId, created } = await db.transaction(async (tx) => {
+    // Escola pré-cadastrada (19 unidades): reutiliza/atualiza pelo código em vez de criar duplicada.
+    const existing = codigoInput !== null ? await tx.select().from(escolas).where(eq(escolas.codigo, codigoInput)) : [];
+    if (existing.length > 0) {
+      await tx
+        .update(escolas)
+        .set({ nome: existing[0].nome, tipo: tipo ?? existing[0].tipo, ativo: true })
+        .where(eq(escolas.id, existing[0].id));
+      for (const t of turmasInput) {
+        await tx.insert(turmas).values({
+          escolaId: existing[0].id,
+          codigo: turmaCodigo++,
+          nome: t.nome.trim(),
+          ano: t.ano.trim(),
+          turno: t.turno.trim(),
+          professor: typeof t.professor === "string" && t.professor.trim() ? t.professor.trim() : null,
+          anoLetivo: ANO_LETIVO,
+        });
+      }
+      return { id: existing[0].id, created: false };
+    }
     const [escola] = await tx
       .insert(escolas)
-      .values({ nome, codigo: escolaCodigo })
+      .values({ nome, codigo: escolaCodigo, tipo })
       .returning({ id: escolas.id });
     for (const t of turmasInput) {
       await tx.insert(turmas).values({
@@ -58,10 +79,10 @@ export async function POST(req: Request) {
         anoLetivo: ANO_LETIVO,
       });
     }
-    return escola;
+    return { id: escola.id, created: true };
   });
 
-  return NextResponse.json({ ok: true, id: escolaId, nome, turmas: turmasInput.length });
+  return NextResponse.json({ ok: true, id: escolaId, nome, turmas: turmasInput.length, created });
 }
 
 /**
@@ -69,7 +90,7 @@ export async function POST(req: Request) {
  * Retorna escolas com suas turmas e os alunos matriculados no ano letivo.
  */
 export async function GET() {
-  const schools = await db.select().from(escolas).orderBy(asc(escolas.nome));
+  const schools = await db.select().from(escolas).orderBy(asc(escolas.codigo));
 
   const turmasRows = await db
     .select()

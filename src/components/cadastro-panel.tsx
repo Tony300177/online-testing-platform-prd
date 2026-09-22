@@ -12,7 +12,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ESCOLAS_MUNICIPAIS, escolaLabel } from "@/lib/municipal-schools";
+import { ESCOLAS_MUNICIPAIS, escolaLabel, escolaTipo } from "@/lib/municipal-schools";
 
 type AlunoItem = { id: string; nome: string; numeroChamada: number | null };
 type TurmaItem = { id: string; nome: string; ano: string; turno: string; professor: string | null; alunos: AlunoItem[] };
@@ -74,7 +74,7 @@ export default function CadastroPanel({ initialEscolas }: { initialEscolas: Esco
       const res = await fetch("/api/escolas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: escolaSel.nome, codigo: escolaSel.numero, turmas: validTurmas }),
+        body: JSON.stringify({ nome: escolaSel.nome, codigo: escolaSel.numero, tipo: escolaTipo(escolaSel.numero), turmas: validTurmas }),
       });
       const data = await res.json();
       if (!res.ok) {

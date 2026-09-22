@@ -18,12 +18,18 @@ import {
  * ============================================================ */
 
 /** Escolas da rede. */
-export const escolas = pgTable("escolas", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  nome: text("nome").notNull(),
-  codigo: integer("codigo"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const escolas = pgTable(
+  "escolas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nome: text("nome").notNull(),
+    codigo: integer("codigo"),
+    tipo: text("tipo"), // "CEI" | "CEM" | "EM" | "ERM"
+    ativo: boolean("ativo").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("escolas_codigo_uniq").on(t.codigo)]
+);
 
 /** Professores da rede (entidade própria; turmas referenciam por professor_id). */
 export const professores = pgTable(
@@ -32,6 +38,11 @@ export const professores = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     nome: text("nome").notNull(),
     codigo: integer("codigo"),
+    cpf: text("cpf"),
+    matricula: text("matricula"),
+    email: text("email"),
+    telefone: text("telefone"),
+    ativo: boolean("ativo").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index("professores_nome_idx").on(t.nome)]
@@ -53,6 +64,7 @@ export const turmas = pgTable(
     professorCodigo: integer("professor_codigo"),
     professorId: uuid("professor_id").references(() => professores.id, { onDelete: "set null" }),
     anoLetivo: integer("ano_letivo").notNull().default(2026),
+    ativo: boolean("ativo").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index("turmas_escola_idx").on(t.escolaId), index("turmas_professor_idx").on(t.professorId)]

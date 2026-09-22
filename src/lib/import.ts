@@ -8,6 +8,7 @@ import {
   type Professor,
   type Turma,
 } from "@/db/schema";
+import { ESCOLAS_MUNICIPAIS } from "@/lib/municipal-schools";
 import { normalize } from "@/lib/utils";
 
 const DEFAULT_ANO_LETIVO = 2026;
@@ -35,6 +36,7 @@ const TURNO_SINONIMOS: Record<string, string> = {
 
 /** Cabeçalhos aceitos por campo (comparação normalizada: sem acento, sem º/ª, maiúsculas). */
 const HEADER_ALIASES: Record<string, string[]> = {
+  CODIGO_ESCOLA: ["CODIGO ESCOLA", "CODIGO DA ESCOLA", "CODIGO", "Nº", "NUMERO", "NUM"],
   ESCOLA: ["ESCOLA", "NOME DA ESCOLA", "NOME DA UNIDADE", "UNIDADE"],
   TURMA: ["TURMA", "NOME DA TURMA", "TURMA (NOME)", "CLASSE", "SALA"],
   ANO: ["ANO", "SERIE", "SÉRIE", "ANO/SERIE", "ANO E SERIE", "TURMA_ANO", "TURMA ANO"],
@@ -42,7 +44,7 @@ const HEADER_ALIASES: Record<string, string[]> = {
   PROFESSOR: ["PROFESSOR", "NOME DO PROFESSOR", "PROFESSOR (NOME)", "DOCENTE"],
 };
 
-export const CANONICAL_FIELDS = ["ESCOLA", "TURMA", "ANO", "TURNO", "PROFESSOR"] as const;
+export const CANONICAL_FIELDS = ["CODIGO_ESCOLA", "ESCOLA", "TURMA", "ANO", "TURNO", "PROFESSOR"] as const;
 export type ImportField = (typeof CANONICAL_FIELDS)[number];
 
 /** Normaliza um cabeçalho para comparação (ex.: "Nº" -> "N"). */
@@ -109,6 +111,87 @@ function normalizeTurno(value: string): Turno | null {
   return (TURNO_SINONIMOS[stripped] ?? TURNO_SINONIMOS[v] ?? null) as Turno | null;
 }
 
+/* ============================================================
+ * Ano/Série padronizado: Maternal I/II, Pré I/II, 1º–9º Ano
+ * ============================================================ */
+
+export const ANOS_SERIES = [
+  "Maternal I",
+  "Maternal II",
+  "Pré I",
+  "Pré II",
+  "1º Ano",
+  "2º Ano",
+  "3º Ano",
+  "4º Ano",
+  "5º Ano",
+  "6º Ano",
+  "7º Ano",
+  "8º Ano",
+  "9º Ano",
+] as const;
+
+const ANO_ALIASES: Record<string, string> = {
+  MATERNALI: "Maternal I",
+  MATERNAL: "Maternal I",
+  "MATERNAL I": "Maternal I",
+  "MATERNAL 1": "Maternal I",
+  "MATERNALII": "Maternal II",
+  "MATERNAL 2": "Maternal II",
+  "MATERNAL II": "Maternal II",
+  "PREI": "Pré I",
+  "PRE I": "Pré I",
+  "PRE 1": "Pré I",
+  "PREII": "Pré II",
+  "PRE II": "Pré II",
+  "PRE 2": "Pré II",
+  "PRÉ I": "Pré I",
+  "PRÉ II": "Pré II",
+  "1º ANO": "1º Ano",
+  "1": "1º Ano",
+  "2º ANO": "2º Ano",
+  "2": "2º Ano",
+  "3º ANO": "3º Ano",
+  "3": "3º Ano",
+  "4º ANO": "4º Ano",
+  "4": "4º Ano",
+  "5º ANO": "5º Ano",
+  "5": "5º Ano",
+  "6º ANO": "6º Ano",
+  "6": "6º Ano",
+  "7º ANO": "7º Ano",
+  "7": "7º Ano",
+  "8º ANO": "8º Ano",
+  "8": "8º Ano",
+  "9º ANO": "9º Ano",
+  "9": "9º Ano",
+};
+
+/** Normaliza uma string de ano/série para a forma canônica ("5ºA" → "5º Ano"). */
+export function normalizeAnoSerie(value: string): string | null {
+  if (!value) return null;
+  const v = value
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[º°]/g, "")
+    .replace(/\s+/g, " ");
+  if (!v) return null;
+  // "5 A" / "1A" / "5 ANO" / "5o" / "5" → derive o ano
+  const m = v.match(/^(\d{1,2})\s*[O]?\s*A?N?O?\s*$/);
+  if (m) {
+    const n = Number(m[1]);
+    if (n >= 1 && n <= 9) return `${n}º Ano`;
+  }
+  // "MATERNAL I", "MATERNALII", "MATERNAL 2" → Educação infantil
+  const mi = v.match(/^MATERNAL\s*(I{1,2}|2)?$/);
+  if (mi) return `Maternal ${mi[1] && (mi[1].length === 2 || mi[1] === "2") ? "II" : "I"}`;
+  const pre = v.match(/^PRE\s*(I{1,2}|2)?$/);
+  if (pre) return `Pré ${pre[1] && (pre[1].length === 2 || pre[1] === "2") ? "II" : "I"}`;
+  return null;
+}
+
 function toInt(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined || value === "") return null;
   const n = typeof value === "number" ? value : Number(String(value).replace(/\D/g, ""));
@@ -151,6 +234,7 @@ export type Escrita = {
   escolasCriadas: number;
   professoresCriados: number;
   turmasCriadas: number;
+  turmasAtualizadas: number;
   ignoradas: number;
 };
 
@@ -178,6 +262,12 @@ type ParsedRow = {
   motivos: string[];
   avisos: string[];
 };
+
+/** Encontra a unidade escolar oficial pelo código (01-19). */
+function findOfficialSchool(codigo: number | null): { numero: number; nome: string } | null {
+  if (codigo === null) return null;
+  return ESCOLAS_MUNICIPAIS.find((e) => e.numero === codigo) ?? null;
+}
 
 type DbSnapshot = {
   escolas: Escola[];
@@ -216,8 +306,11 @@ export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number, es
     const motivos: string[] = [];
     const avisos: string[] = [];
 
-    const escola = get("ESCOLA", row).toUpperCase() || (escolaDefault ? escolaDefault.toUpperCase() : "");
-    const escolaCodigo = toInt(row[headerMap.get("ESCOLA") ?? ""]);
+    const escolaCodigo = toInt(row[headerMap.get("CODIGO_ESCOLA") ?? ""]);
+    const oficial = findOfficialSchool(escolaCodigo);
+    const escola = oficial
+      ? oficial.nome
+      : get("ESCOLA", row).toUpperCase() || (escolaDefault ? escolaDefault.toUpperCase() : "");
     const turmaRaw = get("TURMA", row).toUpperCase();
     const anoRaw = get("ANO", row);
     const turno = normalizeTurno(get("TURNO", row));
@@ -226,13 +319,23 @@ export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number, es
     const professor = stripPrefix(professorRaw).toUpperCase();
     const professorCodigo = toInt(professorRaw.split(/\s*-\s*/)[0]);
 
-    // Turma/ano: "5ºA" → ano="5º Ano", turma="5ºA"; senão usa a coluna ANO.
+    // Ano/série: usa a coluna ANO; se ausente, tira do nome da turma ("5ºA" → "5º Ano").
     const turmaMatch = turmaRaw.match(/^(\d+)\s*[ºo°]?\s*(.*)$/i);
-    const ano = anoRaw || (turmaMatch ? turmaMatch[1] + "º Ano" : anoRaw);
+    const ano = normalizeAnoSerie(anoRaw) ?? (turmaMatch ? normalizeAnoSerie(turmaMatch[1]) ?? `${turmaMatch[1]}º Ano` : null) ?? anoRaw;
 
-    if (escola.length < 3) motivos.push("ESCOLA ausente ou muito curta");
+    if (oficial) {
+      const nomePlanilha = get("ESCOLA", row).trim().toUpperCase();
+      if (nomePlanilha && normalize(nomePlanilha) !== normalize(oficial.nome)) {
+        avisos.push(`Escola no arquivo difere da oficial: "${nomePlanilha}" → usada "${oficial.nome}"`);
+      }
+    } else if (escolaCodigo !== null) {
+      motivos.push(`CÓDIGO de escola ${escolaCodigo} não consta nas 19 unidades municipais`);
+    } else {
+      if (escola.length < 3) motivos.push("CÓDIGO e/ou ESCOLA ausentes");
+    }
     if (turmaRaw.length < 2) motivos.push("TURMA ausente ou muito curta");
-    if (!ano.trim()) motivos.push("ANO ausente");
+    if (!ano || !ano.trim()) motivos.push("ANO ausente ou inválido");
+    else if (!(ANOS_SERIES as readonly string[]).includes(ano)) motivos.push(`ANO "${ano}" não permitido`);
     if (!turno) motivos.push("TURNO ausente ou inválido");
     if (professor.length < 2) motivos.push("PROFESSOR ausente ou muito curto");
 
@@ -241,7 +344,7 @@ export function parseImportRows(rows: ImportLine[], anoLetivoDefault: number, es
       escola,
       escolaCodigo,
       turma: turmaRaw,
-      ano,
+      ano: ano || anoRaw,
       turno,
       anoLetivo,
       professor,
@@ -263,7 +366,7 @@ export async function validateImport(rows: ImportLine[], anoLetivoDefault = DEFA
 
   for (const item of items) {
     const motivos = [...item.motivos];
-    const avisos: string[] = [];
+    const avisos = [...item.avisos];
 
     const base: ReportItem = {
       linha: item.linha,
@@ -330,6 +433,7 @@ export async function commitImport(rows: ImportLine[], anoLetivoDefault = DEFAUL
     escolasCriadas: 0,
     professoresCriados: 0,
     turmasCriadas: 0,
+    turmasAtualizadas: 0,
     ignoradas: 0,
   };
 
@@ -348,17 +452,19 @@ export async function commitImport(rows: ImportLine[], anoLetivoDefault = DEFAUL
         ano: item.ano,
         turno: item.turno ?? "",
         professor: item.professor,
-        motivos: [...item.motivos],
+        motivos: [...item.motivos, ...item.avisos],
       };
 
       if (item.motivos.length > 0) {
-        itens.push({ ...base, status: "erro" });
+        itens.push({ ...base, status: "erro", motivos: [...item.motivos] });
         continue;
       }
 
-      // ---- Escola ----
+      // ---- Escola (prefere o código oficial 01-19) ----
       let escola = [...escolaById.values()].find(
-        (e) => (item.escolaCodigo !== null && e.codigo === item.escolaCodigo) || normalize(e.nome) === normalize(item.escola)
+        (e) =>
+          (item.escolaCodigo !== null && e.codigo === item.escolaCodigo) ||
+          normalize(e.nome) === normalize(item.escola)
       );
       if (!escola) {
         const [ins] = await tx
@@ -407,11 +513,11 @@ export async function commitImport(rows: ImportLine[], anoLetivoDefault = DEFAUL
         escrita.turmasCriadas += 1;
         itens.push({ ...base, status: "ok" });
       } else {
-        // Mantém existente, atualizando dados que mudaram
+        // Importação inteligente: detecta o que mudou para marcar como atualiizada/nova campo.
         const patch: Partial<typeof turmas.$inferInsert> = {};
         if (item.turno && turma.turno !== item.turno) patch.turno = item.turno;
         if (turma.ano !== item.ano) patch.ano = item.ano;
-        if (!turma.professorId) {
+        if (turma.professorId !== professor.id) {
           patch.professorId = professor.id;
           patch.professor = professor.nome;
           patch.professorCodigo = professor.codigo ?? undefined;
@@ -420,9 +526,12 @@ export async function commitImport(rows: ImportLine[], anoLetivoDefault = DEFAUL
           await tx.update(turmas).set(patch).where(eq(turmas.id, turma.id));
           turma = { ...turma, ...patch };
           turmaById.set(turma.id, turma);
+          escrita.turmasAtualizadas += 1;
+          itens.push({ ...base, status: "aviso", motivos: ["Turma já cadastrada — dados atualizados"] });
+        } else {
+          escrita.ignoradas += 1;
+          itens.push({ ...base, status: "aviso", motivos: ["Turma já cadastrada — mantida como está"] });
         }
-        escrita.ignoradas += 1;
-        itens.push({ ...base, status: "aviso", motivos: ["Turma já cadastrada — mantida/atualizada"] });
       }
     }
   });

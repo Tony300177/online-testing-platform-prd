@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 
 // Conjunto de cabeçalhos conhecidos para auto-detecção (normalizados: uppercase, sem acento, sem ºª)
 const KNOWN_HEADER_SET = new Set([
+  "CODIGO ESCOLA", "CODIGO DA ESCOLA", "CODIGO", "N", "NUMERO", "NUM",
   "ESCOLA", "NOME DA ESCOLA", "NOME DA UNIDADE", "UNIDADE",
   "TURMA", "NOME DA TURMA", "CLASSE", "SALA",
   "ANO", "SERIE", "ANO/SERIE", "ANO E SERIE", "TURMA ANO",
@@ -45,6 +46,7 @@ type ImportReport = {
     escolasCriadas: number;
     professoresCriados: number;
     turmasCriadas: number;
+    turmasAtualizadas: number;
     ignoradas: number;
   };
 };
@@ -52,25 +54,49 @@ type ImportReport = {
 type FileState = { name: string; size: number; rows: Record<string, string | number | null | undefined>[]; escola: string };
 
 const TEMPLATE_HEADERS = [
+  "CÓDIGO ESCOLA",
   "ESCOLA",
-  "TURMA",
-  "ANO",
+  "NOME DA TURMA",
+  "ANO/SÉRIE",
   "TURNO",
   "PROFESSOR",
 ];
 
 const TEMPLATE_EXAMPLE = [
-  "CEM - VASCO PAPA",
+  "11",
+  "CEM VASCO PAPA",
   "5º A",
   "5º Ano",
   "Matutino",
   "JANETE FRANCISCA DA SILVA",
 ];
 
+const ANOS_SERIES_TEMPLATE = [
+  "Maternal I",
+  "Maternal II",
+  "Pré I",
+  "Pré II",
+  "1º Ano",
+  "2º Ano",
+  "3º Ano",
+  "4º Ano",
+  "5º Ano",
+  "6º Ano",
+  "7º Ano",
+  "8º Ano",
+  "9º Ano",
+];
+
+const TURNOS_TEMPLATE = ["Matutino", "Vespertino", "Noturno", "Integral"];
+
 function downloadExcel(headers: string[], example: string[]) {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet([Object.fromEntries(headers.map((h, i) => [h, example[i]]))]);
   XLSX.utils.book_append_sheet(wb, ws, "Modelo");
+  const wsAux = XLSX.utils.aoa_to_sheet([["Anos/Séries aceitos", ""], ...ANOS_SERIES_TEMPLATE.map((a) => [a])]);
+  XLSX.utils.book_append_sheet(wb, wsAux, "Anos e Séries");
+  const wsTurnos = XLSX.utils.aoa_to_sheet([["Turnos aceitos", ""], ...TURNOS_TEMPLATE.map((t) => [t])]);
+  XLSX.utils.book_append_sheet(wb, wsTurnos, "Turnos");
   XLSX.writeFile(wb, "modelo-importacao-turmas.xlsx");
 }
 
@@ -102,6 +128,7 @@ function downloadCsv(csv: string, filename: string) {
 export default function ImportPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<FileState | null>(null);
+  const [anoLetivo, setAnoLetivo] = useState<number>(2026);
   const [busy, setBusy] = useState<"validar" | "publicar" | null>(null);
   const [report, setReport] = useState<ImportReport | null>(null);
   const [published, setPublished] = useState(false);
@@ -175,7 +202,7 @@ export default function ImportPanel() {
       const res = await fetch("/api/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: file.rows, escola: file.escola }),
+        body: JSON.stringify({ rows: file.rows, escola: file.escola, anoLetivo }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -199,7 +226,7 @@ export default function ImportPanel() {
       const res = await fetch("/api/import/commit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: file.rows, escola: file.escola }),
+        body: JSON.stringify({ rows: file.rows, escola: file.escola, anoLetivo }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -224,7 +251,7 @@ export default function ImportPanel() {
             <Info className="h-4 w-4" /> Modelo de planilha
           </h2>
           <p className="mt-0.5 text-xs text-indigo-700">
-            Colunas: ESCOLA, TURMA, ANO, TURNO e PROFESSOR (uma linha por turma).
+            Colunas: CÓDIGO ESCOLA, ESCOLA, NOME DA TURMA, ANO/SÉRIE, TURNO e PROFESSOR (uma linha por turma).
           </p>
         </div>
         <button
@@ -234,6 +261,26 @@ export default function ImportPanel() {
         >
           <Download className="h-3.5 w-3.5" /> Baixar modelo Excel
         </button>
+      </div>
+
+      {/* Ano letivo */}
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4">
+        <label htmlFor="ano-letivo" className="text-sm font-semibold text-slate-700">
+          Ano letivo
+        </label>
+        <select
+          id="ano-letivo"
+          value={anoLetivo}
+          onChange={(e) => setAnoLetivo(Number(e.target.value))}
+          className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+        >
+          {[2026, 2027, 2025].map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-slate-400">As turmas serão vinculadas ao ano letivo selecionado.</p>
       </div>
 
       {/* Upload */}
@@ -369,10 +416,11 @@ export default function ImportPanel() {
           {/* Escrita */}
           {published && report.escrita && (
             <div className="grid gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:grid-cols-2 lg:grid-cols-4">
-              <WriteStat label="Escolas criadas" value={report.escrita.escolasCriadas} />
-              <WriteStat label="Professores criados" value={report.escrita.professoresCriados} />
-              <WriteStat label="Turmas criadas" value={report.escrita.turmasCriadas} />
-              <WriteStat label="Turmas já existiam (mantidas)" value={report.escrita.ignoradas} />
+              <WriteStat label="Escolas criadas" value={report.escrita.escolasCriadas} accent="text-emerald-700" />
+              <WriteStat label="Professores criados" value={report.escrita.professoresCriados} accent="text-emerald-700" />
+              <WriteStat label="Novas turmas" value={report.escrita.turmasCriadas} accent="text-blue-700" />
+              <WriteStat label="Turmas atualizadas" value={report.escrita.turmasAtualizadas} accent="text-indigo-700" />
+              <WriteStat label="Turmas já existentes (mantidas)" value={report.escrita.ignoradas} accent="text-slate-600" />
             </div>
           )}
 
@@ -493,10 +541,10 @@ function MetricCard({
   );
 }
 
-function WriteStat({ label, value }: { label: string; value: number }) {
+function WriteStat({ label, value, accent = "text-emerald-700" }: { label: string; value: number; accent?: string }) {
   return (
     <div className="rounded-xl border border-emerald-100 bg-white px-4 py-3">
-      <p className="text-lg font-extrabold text-emerald-700">{value}</p>
+      <p className={cn("text-lg font-extrabold", accent)}>{value}</p>
       <p className="text-xs font-medium text-slate-500">{label}</p>
     </div>
   );

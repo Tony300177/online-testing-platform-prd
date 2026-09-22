@@ -142,8 +142,7 @@ export default function ImportPanel() {
   const [escolaCodigo, setEscolaCodigo] = useState<number | null>(null);
   const selectedEscola = ESCOLAS_MUNICIPAIS.find((ec) => ec.numero === escolaCodigo) ?? null;
 
-  // Arquivo + ano letivo (planilha única da secretaria, com todas as escolas)
-  const [anoLetivo, setAnoLetivo] = useState<number>(2026);
+  // Arquivo (planilha da escola)
   const [file, setFile] = useState<FileState | null>(null);
 
   // Validação / conclusão
@@ -203,7 +202,7 @@ export default function ImportPanel() {
       const res = await fetch("/api/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: file.rows, escolaCodigo: escolaCodigo ?? undefined, anoLetivo }),
+        body: JSON.stringify({ rows: file.rows, escolaCodigo: escolaCodigo ?? undefined, anoLetivo: 2026 }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -228,7 +227,7 @@ export default function ImportPanel() {
       const res = await fetch("/api/import/commit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: file.rows, escolaCodigo: escolaCodigo ?? undefined, anoLetivo }),
+        body: JSON.stringify({ rows: file.rows, escolaCodigo: escolaCodigo ?? undefined, anoLetivo: 2026 }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -248,7 +247,6 @@ export default function ImportPanel() {
   function resetAll() {
     setStep("arquivo");
     setEscolaCodigo(null);
-    setAnoLetivo(2026);
     setFile(null);
     setReport(null);
     setError("");
@@ -274,12 +272,10 @@ export default function ImportPanel() {
         <div className="grid items-start gap-6 lg:grid-cols-2">
           <div className="space-y-4">
             <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Planilha da secretaria</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">Um único arquivo com todas as escolas</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Planilha da escola</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">Apenas a planilha da escola</p>
               <p className="mt-2 text-xs leading-relaxed text-slate-600">
-                A escola de cada linha é identificada pelas colunas <strong>CÓDIGO ESCOLA</strong> e{" "}
-                <strong>ESCOLA</strong>. O arquivo pode conter registros de várias escolas (alunos, turmas,
-                professores e escolas) — não é necessário uma planilha por escola.
+                Envie a planilha da escola com as turmas, professores e alunos.
               </p>
             </div>
 
@@ -309,25 +305,6 @@ export default function ImportPanel() {
                   ? "Sem filtro: toda a planilha é importada e as linhas são gravadas na escola informada em cada linha."
                   : `Filtro ativo: ${selectedEscola?.nome}. Apenas os registros desta escola serão importados; linhas de outras unidades são ignoradas.`}
               </p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-5">
-              <label htmlFor="ano-letivo" className="mb-1 block text-sm font-semibold text-slate-700">
-                Ano letivo
-              </label>
-              <select
-                id="ano-letivo"
-                value={anoLetivo}
-                onChange={(e) => setAnoLetivo(Number(e.target.value))}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-              >
-                {[2026, 2027, 2025].map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-2 text-xs text-slate-400">As turmas serão vinculadas ao ano letivo selecionado.</p>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -360,7 +337,7 @@ export default function ImportPanel() {
             >
               <FileSpreadsheet className="h-10 w-10 text-indigo-500" />
               <p className="text-sm font-semibold text-slate-700">
-                {file ? file.name : "Selecione a planilha da secretaria"}
+                {file ? file.name : "Selecione a planilha da escola"}
               </p>
               <p className="text-xs text-slate-400">Arraste ou clique · .xlsx e .xls · máximo 5.000 linhas</p>
               {file && (
@@ -406,7 +383,7 @@ export default function ImportPanel() {
           <ValidationHeader
             escola={selectedEscola ? selectedEscola.nome : "Todas as escolas"}
             report={report}
-            anoLetivo={anoLetivo}
+            anoLetivo={2026}
           />
 
           {/* Métricas */}
@@ -587,7 +564,7 @@ export default function ImportPanel() {
           <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
           <h2 className="mt-3 text-xl font-extrabold text-slate-900">Cadastros salvos</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Importação confirmada no Supabase · <strong>{selectedEscola ? selectedEscola.nome : "Todas as escolas"}</strong> · Ano letivo {anoLetivo}
+            Importação confirmada no Supabase · <strong>{selectedEscola ? selectedEscola.nome : "Todas as escolas"}</strong> · Ano letivo 2026
           </p>
 
           <div className="mx-auto mt-6 grid max-w-xl gap-3 text-left sm:grid-cols-2">

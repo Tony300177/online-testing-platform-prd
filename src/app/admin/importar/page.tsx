@@ -17,7 +17,7 @@ export default async function AdminImportarPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Gestão de cadastros</p>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Importação de planilha</h1>
           <p className="text-sm text-slate-500">
-            Envie a planilha da secretaria (um único arquivo com todas as escolas); opcionalmente filtre por escola, valide e confirme a importação no Supabase.
+            Envie a planilha da escola (turmas, professores e alunos) e confirme a importação no Supabase.
           </p>
         </div>
       </div>

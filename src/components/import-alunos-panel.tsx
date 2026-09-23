@@ -56,7 +56,6 @@ export default function ImportarAlunosPanel() {
 
   // Turma
   const [turmaId, setTurmaId] = useState<string>("");
-  const [anoLetivo, setAnoLetivo] = useState<number>(2026);
 
   // Planilha
   const [file, setFile] = useState<FileState | null>(null);
@@ -98,20 +97,20 @@ export default function ImportarAlunosPanel() {
   function baixarModelo() {
     if (!fixedEscola || !selectedEscola) return;
     const turmas = turmaId ? selectedEscola.turmas.filter((t) => t.id === turmaId) : selectedEscola.turmas;
-    const headers = ["Nº", "NOME DO ALUNO", "CPF", "DATA DE NASCIMENTO", "TURMA", "TURNO"];
+    const headers = ["NOME", "INEP DO ALUNO", "TURMA", "MATRÍCULA"];
     const linhas: (string | number)[][] = [];
-    linhas.push([`Importação de alunos — ${fixedEscola.nome} — ${anoLetivo}`, "", "", "", "", ""]);
+    linhas.push([`Importação de alunos — ${fixedEscola.nome} — 2026`, "", "", ""]);
     linhas.push(headers);
     for (const t of turmas) {
       for (let i = 0; i < 3; i++) {
-        linhas.push(["", "", "", "", t.nome, t.turno]);
+        linhas.push(["", "", t.nome, ""]);
       }
     }
     const ws = XLSX.utils.aoa_to_sheet(linhas);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Alunos");
     const slug = fixedEscola.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-");
-    XLSX.writeFile(wb, `modelo-alunos-${slug}-${anoLetivo}.xlsx`);
+    XLSX.writeFile(wb, `modelo-alunos-${slug}-2026.xlsx`);
   }
 
   /* ---------- Parse do arquivo ---------- */
@@ -128,7 +127,7 @@ export default function ImportarAlunosPanel() {
       if (raw.length < 2) throw new Error("Nenhuma linha de dados encontrada.");
 
       // Detecta a linha do cabeçalho
-      const KNOWN = ["Nº", "NOME DO ALUNO", "CPF", "DATA DE NASCIMENTO", "TURMA", "TURNO"];
+      const KNOWN = ["NOME", "INEP DO ALUNO", "TURMA", "MATRÍCULA"];
       const norm = (s: string) =>
         s.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[ºª]/g, "").replace(/\s+/g, " ");
       const headerIdx = raw.findIndex((row) => {
@@ -168,7 +167,6 @@ export default function ImportarAlunosPanel() {
         body: JSON.stringify({
           escolaId: selectedEscola.id,
           turmaId: turmaId || undefined,
-          anoLetivo,
           rows: file.rows,
         }),
       });
@@ -197,7 +195,6 @@ export default function ImportarAlunosPanel() {
         body: JSON.stringify({
           escolaId: selectedEscola.id,
           turmaId: turmaId || undefined,
-          anoLetivo,
           rows: file.rows,
         }),
       });
@@ -324,28 +321,13 @@ export default function ImportarAlunosPanel() {
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                  <label className="mb-1 block text-sm font-semibold text-slate-700">Ano letivo</label>
-                  <select
-                    value={anoLetivo}
-                    onChange={(e) => setAnoLetivo(Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                  >
-                    {[2026, 2027, 2025].map((a) => (
-                      <option key={a} value={a}>
-                        {a}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={baixarModelo}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
                   >
-                    <Download className="h-4 w-4" /> Baixar modelo ({anoLetivo})
+                    <Download className="h-4 w-4" /> Baixar modelo
                   </button>
                 </div>
 
@@ -367,7 +349,7 @@ export default function ImportarAlunosPanel() {
                     {file ? file.name : "Arraste a planilha ou clique para enviar"}
                   </p>
                   <p className="text-xs text-slate-400">
-                    {file ? `${file.rows.length} aluno(s) no arquivo` : "Modelo: Nº · Nome do aluno · CPF · Data de nascimento · Turma · Turno"}
+                    {file ? `${file.rows.length} aluno(s) no arquivo` : "Modelo: Nome · INEP do Aluno · Turma · Matrícula"}
                   </p>
                   <input
                     id="arquivo-alunos"
@@ -521,7 +503,7 @@ export default function ImportarAlunosPanel() {
           <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
           <h2 className="mt-3 text-xl font-extrabold text-slate-900">Importação concluída</h2>
           <p className="mt-1 text-sm text-slate-600">
-            <strong>{fixedEscola?.nome}</strong> · Ano letivo {anoLetivo}
+            <strong>{fixedEscola?.nome}</strong> · Ano letivo 2026
           </p>
 
           <div className="mx-auto mt-6 grid max-w-xl gap-3 text-left sm:grid-cols-2">

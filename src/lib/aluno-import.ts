@@ -20,14 +20,16 @@ const DEFAULT_ANO_LETIVO = 2026;
 
 const HEADER_ALIASES: Record<string, string[]> = {
   NUMERO_CHAMADA: ["Nº", "N", "NUMERO", "NUMERO CHAMADA", "Nº CHAMADA", "CHAMADA"],
-  NOME: ["NOME DO ALUNO", "NOME", "ALUNO", "NOME COMPLETO"],
+  NOME: ["NOME", "NOME DO ALUNO", "ALUNO", "NOME COMPLETO"],
+  INEP: ["INEP DO ALUNO", "INEP", "CODIGO INEP", "CODIGO DO ALUNO INEP", "INEP ESTUDANTE"],
+  MATRICULA: ["MATRICULA", "MATRÍCULA", "Nº MATRICULA", "Nº MATRÍCULA", "NUMERO MATRICULA", "NUMERO DA MATRICULA"],
   CPF: ["CPF", "CPF DO ALUNO"],
   DATA_NASCIMENTO: ["DATA DE NASCIMENTO", "DATA NASCIMENTO", "NASCIMENTO", "DT NASCIMENTO", "DATA"],
   TURMA: ["TURMA", "NOME DA TURMA", "CLASSE", "SALA"],
   TURNO: ["TURNO", "PERIODO", "PERÍODO", "TURNO AULA"],
 };
 
-export const ALUNO_FIELDS = ["NUMERO_CHAMADA", "NOME", "CPF", "DATA_NASCIMENTO", "TURMA", "TURNO"] as const;
+export const ALUNO_FIELDS = ["NUMERO_CHAMADA", "NOME", "INEP", "MATRICULA", "CPF", "DATA_NASCIMENTO", "TURMA", "TURNO"] as const;
 export type AlunoImportField = (typeof ALUNO_FIELDS)[number];
 
 export function normalizeHeader(value: string): string {
@@ -144,6 +146,8 @@ export type ParsedAlunoRow = {
   linha: number;
   nome: string;
   cpf: string | null;
+  inep: string | null;
+  matricula: string | null;
   dataNascimento: string | null;
   numeroChamada: number | null;
   turma: string;
@@ -216,8 +220,10 @@ export function parseAlunoRows(rows: ImportAlunoLine[], options: AlunoImportOpti
 
     const nome = get("NOME", row).toUpperCase();
     const cpfRaw = cleanCPF(row[headerMap.get("CPF") ?? ""]);
+    const inep = cleanText(row[headerMap.get("INEP") ?? ""]) || null;
+    const matricula = cleanText(row[headerMap.get("MATRICULA") ?? ""]) || null;
     const dataNascimento = cleanDates(row[headerMap.get("DATA_NASCIMENTO") ?? ""]);
-    const numeroChamadaRaw = get("NUMERO_CHAMADA", row);
+    const numeroChamadaRaw = get("MATRICULA", row) || get("NUMERO_CHAMADA", row);
     const turma = get("TURMA", row).toUpperCase();
     const turnoRaw = get("TURNO", row);
 
@@ -239,6 +245,8 @@ export function parseAlunoRows(rows: ImportAlunoLine[], options: AlunoImportOpti
       linha,
       nome,
       cpf: cpfRaw || null,
+      inep,
+      matricula,
       dataNascimento,
       numeroChamada,
       turma,
@@ -392,6 +400,7 @@ export async function commitAlunoImport(rows: ImportAlunoLine[], options: AlunoI
       if (aluno) {
         const patch: Partial<typeof alunos.$inferInsert> = {};
         if (item.cpf && aluno.cpf !== item.cpf) patch.cpf = item.cpf;
+        if (item.inep && aluno.matricula !== item.inep) patch.matricula = item.inep;
         const dataNova = toDate(item.dataNascimento);
         const dataAtual = aluno.dataNascimento instanceof Date ? aluno.dataNascimento : toDate(String(aluno.dataNascimento ?? ""));
         if (dataNova && (!dataAtual || dataAtual.getTime() !== dataNova.getTime())) {
@@ -410,9 +419,9 @@ export async function commitAlunoImport(rows: ImportAlunoLine[], options: AlunoI
           .values({
             nome: item.nome,
             cpf: item.cpf ?? undefined,
+            matricula: item.inep ?? undefined,
             dataNascimento: toDate(item.dataNascimento) ?? undefined,
             numeroChamada: item.numeroChamada ?? undefined,
-            matricula: null,
             senhaHash,
           })
           .returning();

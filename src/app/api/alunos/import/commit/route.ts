@@ -17,12 +17,16 @@ export async function POST(req: Request) {
   const turmaId = typeof body.turmaId === "string" && body.turmaId.trim() ? body.turmaId.trim() : undefined;
   const anoLetivo = Number.isFinite(Number(body.anoLetivo)) ? Number(body.anoLetivo) : undefined;
   const rows = Array.isArray(body.rows) ? body.rows : [];
+  const colunas =
+    body.colunas && typeof body.colunas === "object"
+      ? (body.colunas as Record<string, string>)
+      : undefined;
 
   if (!escolaId) return NextResponse.json({ error: "Selecione a escola." }, { status: 400 });
   if (rows.length === 0) return NextResponse.json({ error: "Nenhuma linha de dados encontrada." }, { status: 400 });
 
   try {
-    const report = await commitAlunoImport(rows, { escolaId, turmaId, anoLetivo });
+    const report = await commitAlunoImport(rows, { escolaId, turmaId, anoLetivo, colunas });
     return NextResponse.json({ ok: true, report });
   } catch (e) {
     console.error("Erro ao importar alunos:", e);

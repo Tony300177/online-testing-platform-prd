@@ -201,6 +201,8 @@ export type AlunoImportOptions = {
   escolaId: string;
   turmaId?: string;
   anoLetivo?: number;
+  /** Mapa nome-do-campo → cabeçalho real na planilha (ex.: NOME, TURMA, ANO, TURNO, PROFESSOR). */
+  colunas?: Record<string, string>;
 };
 
 /* ============================================================

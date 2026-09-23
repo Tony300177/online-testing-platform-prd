@@ -10,6 +10,7 @@ import {
   Check,
   CheckCircle2,
   FileSpreadsheet,
+  FileUp,
   Loader2,
   School,
   Search,
@@ -46,39 +47,86 @@ type AlunoReport = {
   };
 };
 
-type Step = "arquivo" | "escola" | "confirmar" | "importando" | "resultado";
+type Step =
+  | "escola"
+  | "arquivo"
+  | "colunas"
+  | "padroes"
+  | "validar"
+  | "importando"
+  | "resultado";
 
 const STEPS: { id: Step; label: string }[] = [
-  { id: "arquivo", label: "Receber arquivo" },
-  { id: "escola", label: "Selecionar escola" },
-  { id: "confirmar", label: "Confirmar importação" },
-  { id: "resultado", label: "Resultado" },
+  { id: "escola", label: "1. Escola" },
+  { id: "arquivo", label: "2. Arquivo" },
+  { id: "colunas", label: "3. Colunas" },
+  { id: "padroes", label: "4. Padrões" },
+  { id: "validar", label: "5. Validar" },
+  { id: "importando", label: "6. Importação" },
+  { id: "resultado", label: "7. Resultado" },
 ];
+/* Campos da planilha que podem ser mapeados (nesta ordem no passo 3). */
+const CAMPOS: { id: string; etiqueta: string; opcional?: boolean }[] = [
+  { id: "NOME", etiqueta: "Nome do aluno" },
+  { id: "TURMA", etiqueta: "Nome da turma" },
+  { id: "ANO", etiqueta: "Ano/Série" },
+  { id: "TURNO", etiqueta: "Turno" },
+  { id: "PROFESSOR", etiqueta: "Professor", opcional: true },
+];
+
+/* Alias aceitos para auto-detecção (mesma lógica da lib). */
+const ALIASES_CAMPO: Record<string, string[]> = {
+  NOME: ["NOME", "NOME DO ALUNO", "ALUNO", "NOME DO ESTUDANTE", "ESTUDANTE"],
+  TURMA: ["TURMA", "NOME DA TURMA", "TURMA (NOME)", "CLASSE", "SALA", "GRUPO"],
+  ANO: ["ANO", "SERIE", "SÉRIE", "ANO/SERIE", "ANO/SÉRIE", "ANO E SERIE", "ANO E SÉRIE", "TURMA_ANO"],
+  TURNO: ["TURNO", "PERIODO", "PERÍODO", "PERIODO AULA", "HORARIO", "HORÁRIO"],
+  PROFESSOR: ["PROFESSOR", "PROFESSOR (NOME)", "NOME DO PROFESSOR", "DOCENTE"],
+};
 
 function normCompare(value: string): string {
   return value
     .toUpperCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\p{L}\p{N}]/gu, "");
+    .replace(/[^A-Z0-9]/g, "");
 }
 
+function detectarColunas(headers: string[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const campo of Object.keys(ALIASES_CAMPO)) {
+    const aliases = ALIASES_CAMPO[campo].map(normCompare);
+    const hit = headers.find((h) => aliases.includes(normCompare(h))) ?? "";
+    if (hit) map[campo] = hit;
+  }
+  return map;
+}
+
+/**
+ * Fluxo de importação de alunos (escola → arquivo → colunas → padrões → validar → confirmar).
+ */
 export default function ImportUnificadoPanel() {
-  const [step, setStep] = useState<Step>("arquivo");
+  const [step, setStep] = useState<
+    "escola" | "arquivo" | "colunas" | "padroes" | "validar" | "importando" | "resultado"
+  >("escola");
+
+  // Escola
+  const [escolasData, setEscolasData] = useState<
+    { id: string; nome: string; turmas: { id: string; nome: string }[] }[]
+  >([]);
+  const [escolaCodigo, setEscolaCodigo] = useState<number | null>(null);
+  const [buscaEscola, setBuscaEscola] = useState("");
 
   // Arquivo
   const [file, setFile] = useState<FileState | null>(null);
 
-  // Escola
-  const [escolasData, setEscolasData] = useState<{ id: string; nome: string; turmas: { id: string; nome: string }[] }[]>([]);
-  const [escolaCodigo, setEscolaCodigo] = useState<number | null>(null);
-  const [buscaEscola, setBuscaEscola] = useState("");
+  // Colunas mapeadas
+  const [colunas, setColunas] = useState<Record<string, string>>({});
 
   // Importação
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<AlunoReport | null>(null);
   const [error, setError] = useState("");
-  const [verErros, setVerErros] = useState(false);
+  const [semTurmas, setSemTurmas] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,9 +135,7 @@ export default function ImportUnificadoPanel() {
       .then((data) => {
         if (!cancelled && data?.ok) setEscolasData(data.escolas);
       })
-      .catch(() => {
-        /* mantém sem escolas se falhar */
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -102,8 +148,6 @@ export default function ImportUnificadoPanel() {
       escolasData.find((e) => normCompare(e.nome) === normCompare(fixedEscola.nome)) ?? null
     );
   }, [fixedEscola, escolasData]);
-
-  const semTurmas = !selectedEscola || selectedEscola.turmas.length === 0;
 
   /* ---------- Filtro de escolas por busca ---------- */
   const escolasFiltradas = useMemo(() => {
@@ -141,15 +185,47 @@ export default function ImportUnificadoPanel() {
       });
       if (rows.length === 0) throw new Error("Nenhuma linha de dados depois do cabeçalho.");
       setFile({ name: f.name, rows });
+      setColunas(detectarColunas(headers));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não foi possível ler o arquivo.");
       setFile(null);
     }
   }, []);
 
-  /* ---------- Importar (valida + grava em uma passada) ---------- */
+  /* ---------- Validar planilha (dry-run: valida sem gravar) ---------- */
+  async function validar() {
+    if (!file || !fixedEscola) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/alunos/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          escolaId: selectedEscola?.id ?? "",
+          colunas,
+          rows: file.rows,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Falha ao validar.");
+        setStep("importando");
+        return;
+      }
+      setReport(data.report);
+      setStep("validar");
+    } catch {
+      setError("Erro de conexão. Tente novamente.");
+      setStep("arquivo");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /* ---------- Importar (confirmação: grava no banco) ---------- */
   async function importar() {
-    if (!file || !selectedEscola) return;
+    if (!file || !fixedEscola || !report) return;
     setBusy(true);
     setError("");
     setStep("importando");
@@ -158,22 +234,22 @@ export default function ImportUnificadoPanel() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          escolaId: selectedEscola.id,
+          escolaId: selectedEscola?.id ?? "",
+          colunas,
           rows: file.rows,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Falha ao importar.");
-        setStep("confirmar");
+        setStep("validar");
         return;
       }
       setReport(data.report);
       setStep("resultado");
-      setVerErros(false);
     } catch {
       setError("Erro de conexão. Tente novamente.");
-      setStep("confirmar");
+      setStep("validar");
     } finally {
       setBusy(false);
     }
@@ -186,18 +262,19 @@ export default function ImportUnificadoPanel() {
     setReport(null);
     setError("");
     setBusy(false);
-    setVerErros(false);
-    setStep("arquivo");
+    setStep("escola");
   }
 
   function stepIndex(): number {
-    const order: Step[] = ["arquivo", "escola", "confirmar", "importando", "resultado"];
+    const order: Step[] = ["escola", "arquivo", "colunas", "padroes", "validar", "importando", "resultado"];
     return Math.max(0, order.indexOf(step));
   }
 
-  const importados = report?.escrita?.matriculasCriadas ?? 0;
+  const importados = report?.escrita?.alunosCriados ?? 0;
   const comErros = report?.escrita?.ignorados ?? report?.erros ?? 0;
   const duplicados = report?.escrita?.jaCadastrados ?? 0;
+
+  const headers = file?.rows.length ? Object.keys(file.rows[0]) : [];
 
   /* ================================================================ */
   return (
@@ -230,81 +307,18 @@ export default function ImportUnificadoPanel() {
         <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</p>
       )}
 
-      {/* ============ PASSO 1: Receber arquivo ============ */}
-      {step === "arquivo" && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="flex items-center gap-2 font-bold text-slate-900">
-            <FileSpreadsheet className="h-5 w-5 text-indigo-600" /> Receber arquivo da escola
-          </h2>
-          <p className="mt-1 text-xs text-slate-400">
-            Envie o relatório em Excel (XLSX) enviado pela escola, com uma linha por aluno. Cabeçalho na primeira linha:
-            Nome do aluno, Turma, Ano/Série, Turno e Professor (opcional).
-          </p>
-
-          <div
-            onClick={() => {
-              const input = document.getElementById("arquivo-unificado") as HTMLInputElement | null;
-              input?.click();
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              const f = e.dataTransfer.files?.[0];
-              if (f) void parseFile(f);
-            }}
-            className="mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 bg-white px-6 py-12 text-center transition hover:border-indigo-400 hover:bg-indigo-50/40"
-          >
-            <FileSpreadsheet className="h-12 w-12 text-indigo-500" />
-            <p className="text-sm font-semibold text-slate-700">
-              {file ? file.name : "Arraste a planilha ou clique para enviar"}
-            </p>
-            <p className="text-xs text-slate-400">
-              {file ? `${file.rows.length} aluno(s) encontrados no arquivo` : ".xlsx · primeira linha = cabeçalho"}
-            </p>
-            <input
-              id="arquivo-unificado"
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void parseFile(f);
-              }}
-            />
-          </div>
-
-          <div className="mt-4 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={reset}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={() => setStep("escola")}
-              disabled={!file}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Continuar <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ============ PASSO 2: Selecionar escola ============ */}
+      {/* ============ PASSO 1: Selecionar escola ============ */}
       {step === "escola" && (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="flex items-center gap-2 font-bold text-slate-900">
             <School className="h-5 w-5 text-indigo-600" /> Selecionar escola
           </h2>
           <p className="mt-1 text-xs text-slate-400">
-            Pesquise e selecione a unidade que enviou o arquivo. As turmas e professores já precisam estar cadastrados.
+            Pesquise e selecione a unidade que enviou o arquivo. As turmas devem estar cadastradas.
           </p>
 
-          <div className="relative mt-4">
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <div className="relative mt-4 flex items-center gap-2">
+            <Search className="absolute left-3.5 h-4 w-4 text-slate-400" />
             <input
               type="text"
               value={buscaEscola}
@@ -321,10 +335,7 @@ export default function ImportUnificadoPanel() {
                 <li key={ec.numero}>
                   <button
                     type="button"
-                    onClick={() => {
-                      setEscolaCodigo(ec.numero);
-                      setError("");
-                    }}
+                    onClick={() => setEscolaCodigo(ec.numero)}
                     className={cn(
                       "flex w-full items-start gap-3 px-4 py-3 text-left transition",
                       selected ? "bg-indigo-50" : "hover:bg-slate-50"
@@ -353,24 +364,18 @@ export default function ImportUnificadoPanel() {
             )}
           </ul>
 
-          {fixedEscola && semTurmas && (
-            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-              Esta escola ainda não tem turmas cadastradas no sistema. Importe as turmas primeiro (guia Turmas) — os alunos
-              só são validados contra turmas existentes.
-            </p>
-          )}
-
-          <div className="mt-4 flex items-center justify-between gap-2">
+          <div className="mt-4 flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => setStep("arquivo")}
+              onClick={() => setStep("escola")}
+              disabled={!fixedEscola}
               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
             >
               <ArrowLeft className="h-4 w-4" /> Voltar
             </button>
             <button
               type="button"
-              onClick={() => setStep("confirmar")}
+              onClick={() => setStep("arquivo")}
               disabled={!fixedEscola}
               className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -380,13 +385,143 @@ export default function ImportUnificadoPanel() {
         </div>
       )}
 
-      {/* ============ PASSO 3: Confirmar importação ============ */}
-      {step === "confirmar" && fixedEscola && file && (
+      {/* ============ PASSO 2: Receber arquivo ============ */}
+      {step === "arquivo" && (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="flex items-center gap-2 font-bold text-slate-900">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" /> Confirmar importação
+            <FileSpreadsheet className="h-5 w-5 text-indigo-600" /> Receber arquivo
           </h2>
-          <p className="mt-1 text-xs text-slate-400">Confira os dados abaixo antes de importar.</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Envie a planilha da escola com uma linha por aluno. Cabeçalho na primeira linha.
+          </p>
+
+          <div
+            onClick={() => {
+              const input = document.getElementById("arquivo-unificado") as HTMLInputElement | null;
+              input?.click();
+            }}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const f = e.dataTransfer.files?.[0];
+              if (f) void parseFile(f);
+            }}
+            className="mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 bg-white px-6 py-12 text-center transition hover:border-indigo-400 hover:bg-indigo-50/40"
+          >
+            <FileSpreadsheet className="h-12 w-12 text-indigo-500" />
+            <p className="text-sm font-semibold text-slate-700">
+              {file ? file.name : "Arraste a planilha ou clique para enviar"}
+            </p>
+            <p className="text-xs text-slate-400">
+              {file
+                ? `${file.rows.length} aluno(s) encontrados no arquivo`
+                : ".xlsx · primeira linha = cabeçalho"}
+            </p>
+            <input
+              id="arquivo-unificado"
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void parseFile(f);
+              }}
+            />
+          </div>
+
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setStep("escola")}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+            >
+              <ArrowLeft className="h-4 w-4" /> Voltar
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep("colunas")}
+              disabled={!file}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Continuar <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============ PASSO 3: Identificar colunas ============ */}
+      {step === "colunas" && file && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="flex items-center gap-2 font-bold text-slate-900">
+            <FileSpreadsheet className="h-5 w-5 text-indigo-600" /> Identificar colunas
+          </h2>
+          <p className="mt-1 text-xs text-slate-400">
+            Confirme a correspondência entre as colunas da planilha e os campos do sistema. Professor é opcional.
+          </p>
+
+          <div className="mt-4 space-y-4">
+            {CAMPOS.map((campo) => {
+              const value = colunas[campo.id] ?? "";
+              return (
+                <div key={campo.id} className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-center">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    {campo.etiqueta}
+                    {campo.opcional && <span className="text-xs font-normal text-slate-400">(opcional)</span>}
+                  </label>
+                  <select
+                    value={value}
+                    onChange={(e) =>
+                      setColunas((prev) => {
+                        const next = { ...prev };
+                        if (e.target.value) next[campo.id] = e.target.value;
+                        else delete next[campo.id];
+                        return next;
+                      })
+                    }
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                  >
+                    <option value="">— Não usar / não encontrado —</option>
+                    {headers.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+            {colunas["NOME"] && !headers.includes(colunas["NOME"]) && (
+              <p className="text-xs text-rose-500">A coluna de Nome aponta para um cabeçalho que não está no arquivo.</p>
+            )}
+          </div>
+
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setStep("arquivo")}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+            >
+              <ArrowLeft className="h-4 w-4" /> Voltar
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep("padroes")}
+              disabled={!colunas["NOME"] || !colunas["TURMA"]}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Continuar <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============ PASSO 4: Configurar padrões ============ */}
+      {step === "padroes" && file && fixedEscola && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="flex items-center gap-2 font-bold text-slate-900">
+            <CheckCircle2 className="h-5 w-5 text-indigo-600" /> Configurar padrões
+          </h2>
+          <p className="mt-1 text-xs text-slate-400">Confira os padrões que serão aplicados à importação.</p>
 
           <dl className="mt-4 space-y-3">
             <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -406,90 +541,169 @@ export default function ImportUnificadoPanel() {
               <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Alunos encontrados</dt>
               <dd className="text-lg font-extrabold text-indigo-700">{file.rows.length}</dd>
             </div>
+            <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Padrões</dt>
+              <dd className="max-w-[70%] text-right text-sm font-semibold text-slate-900">
+                Ano/Série e Turno vêm da planilha · Professor opcional
+              </dd>
+            </div>
           </dl>
 
-          {semTurmas && (
-            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-              Sem turmas cadastradas para esta escola: a importação fica toda com erro até você importar as turmas na guia
-              Turmas.
-            </p>
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setStep("colunas")}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+            >
+              <ArrowLeft className="h-4 w-4" /> Voltar
+            </button>
+            <button
+              type="button"
+              onClick={() => void validar()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500"
+            >
+              Continuar <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============ PASSO 5: Validar planilha (dry-run) ============ */}
+      {step === "validar" && report && file && fixedEscola && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-extrabold text-slate-900">
+                <FileUp className="h-5 w-5 text-indigo-600" /> Validar planilha
+              </h2>
+              <p className="mt-1 text-xs text-slate-400">
+                {fixedEscola.nome} · {file.name} · {file.rows.length} linha(s)
+              </p>
+            </div>
+            {report.ok && report.erros === 0 ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" /> Tudo certo, pode importar!
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
+                <AlertTriangle className="h-4 w-4" /> Corrija os erros antes de importar
+              </span>
+            )}
+          </div>
+
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+              <p className="text-2xl font-extrabold text-emerald-700">{report.validas}</p>
+              <p className="text-xs font-semibold text-emerald-700">alunos válidos</p>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-2xl font-extrabold text-amber-600">{report.avisos}</p>
+              <p className="text-xs font-semibold text-amber-600">avisos</p>
+            </div>
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+              <p className="text-2xl font-extrabold text-rose-600">{report.erros}</p>
+              <p className="text-xs font-semibold text-rose-600">erros</p>
+            </div>
+          </div>
+
+          {report.itens.length > 0 && (
+            <div className="mt-4 max-h-72 overflow-y-auto rounded-xl border border-slate-200">
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Linha</th>
+                    <th className="px-3 py-2 font-semibold">Aluno</th>
+                    <th className="px-3 py-2 font-semibold">Turma</th>
+                    <th className="px-3 py-2 font-semibold">Situação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {report.itens.map((i) => (
+                    <tr key={i.linha}>
+                      <td className="px-3 py-2 align-top text-xs font-mono text-slate-400">{i.linha}</td>
+                      <td className="px-3 py-2 align-top font-semibold text-slate-900">{i.nome}</td>
+                      <td className="px-3 py-2 align-top text-xs text-slate-500">
+                        {i.turma} {i.turno ? `· ${i.turno}` : ""}
+                      </td>
+                      <td className="px-3 py-2 align-top text-xs">
+                        {i.status === "ok" && (
+                          <span className="inline-flex items-center gap-1 font-semibold text-emerald-600">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> OK
+                          </span>
+                        )}
+                        {i.status === "aviso" && (
+                          <span className="inline-flex items-center gap-1 font-semibold text-amber-600">
+                            <AlertTriangle className="h-3.5 w-3.5" /> Aviso
+                          </span>
+                        )}
+                        {i.status === "erro" && (
+                          <span className="inline-flex items-center gap-1 font-semibold text-rose-600">
+                            <XCircle className="h-3.5 w-3.5" /> Erro
+                          </span>
+                        )}
+                        {i.motivos.length > 0 && (
+                          <span className="mt-1 block font-normal text-slate-400">
+                            {i.motivos.join(" · ")}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
-          <div className="mt-4 flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => setStep("escola")}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              onClick={() => setStep("arquivo")}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
             >
-              Cancelar
+              <AlertTriangle className="h-4 w-4" /> Corrigir planilha
             </button>
             <button
               type="button"
+              disabled={!report.ok || report.erros > 0}
               onClick={() => void importar()}
-              disabled={busy}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              Importar
+              Confirmar importação <ArrowRight className="h-4 w-4" />{" "}
+              {!report.ok || report.erros > 0 ? "— corriga os erros" : ""}
             </button>
           </div>
         </div>
       )}
 
-      {/* ============ PASSO 4: Importação + validação ============ */}
+      {/* ============ PASSO 6: Importação (grava no banco) ============ */}
       {step === "importando" && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-          <div className="flex flex-col items-center gap-4 text-center">
-            <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
-            <h2 className="text-lg font-extrabold text-slate-900">Importando dados...</h2>
-            <p className="text-sm text-slate-500">
-              {fixedEscola?.nome} · {file?.name}
-            </p>
-
-            <ul className="mx-auto mt-2 w-full max-w-sm space-y-1.5 text-left text-sm">
-              <li className="flex items-center gap-2 text-slate-700">
-                <Check className="h-4 w-4 text-emerald-600" /> Nome do aluno
-              </li>
-              <li className="flex items-center gap-2 text-slate-700">
-                <Check className="h-4 w-4 text-emerald-600" /> Turma existente na escola
-              </li>
-              <li className="flex items-center gap-2 text-slate-700">
-                <Check className="h-4 w-4 text-emerald-600" /> Ano/Série
-              </li>
-              <li className="flex items-center gap-2 text-slate-700">
-                <Check className="h-4 w-4 text-emerald-600" /> Turno
-              </li>
-              <li className="flex items-center gap-2 text-slate-400">
-                <span className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px]">
-                  ○
-                </span>
-                Professor (opcional)
-              </li>
-              <li className="flex items-center gap-2 text-slate-500">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" /> Verificando duplicidades...
-              </li>
-            </ul>
-          </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-indigo-600" />
+          <h2 className="mt-3 text-lg font-extrabold text-slate-900">Importando dados...</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            {fixedEscola?.nome} · {file?.name}
+          </p>
+          <p className="mt-4 text-xs text-slate-400">Validando turmas, ano/série e duplicidades...</p>
         </div>
       )}
 
-      {/* ============ PASSO 5: Resultado ============ */}
+      {/* ============ PASSO 6: Resultado ============ */}
       {step === "resultado" && report && (
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
             <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
             <h2 className="mt-3 text-xl font-extrabold text-slate-900">Resultado da importação</h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-xs text-slate-400">
               {fixedEscola?.nome} · {file?.name}
             </p>
 
-            <div className="mx-auto mt-6 grid max-w-lg grid-cols-1 gap-3 text-left sm:grid-cols-3">
+            <div className="mx-auto mt-6 grid max-w-lg grid-cols-3 gap-3">
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                 <p className="text-2xl font-extrabold text-emerald-700">{importados}</p>
                 <p className="text-xs font-semibold text-emerald-700">alunos importados</p>
               </div>
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="flex items-center gap-1 text-2xl font-extrabold text-amber-600">{comErros}</p>
+                <p className="text-2xl font-extrabold text-amber-600">{comErros}</p>
                 <p className="text-xs font-semibold text-amber-600">alunos com erros</p>
               </div>
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
@@ -499,14 +713,6 @@ export default function ImportUnificadoPanel() {
             </div>
 
             <div className="mt-8 flex flex-wrap justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => setVerErros((v) => !v)}
-                disabled={comErros === 0}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <AlertTriangle className="h-4 w-4" /> {verErros ? "Ocultar erros" : "Ver erros"}
-              </button>
               <Link
                 href="/admin/alunos"
                 className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
@@ -516,54 +722,12 @@ export default function ImportUnificadoPanel() {
               <button
                 type="button"
                 onClick={reset}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500"
               >
                 Concluir
               </button>
             </div>
           </div>
-
-          {/* Erros detalhados */}
-          {verErros && report.itens.some((i) => i.status === "erro") && (
-            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-100 px-5 py-3">
-                <h3 className="flex items-center gap-2 text-sm font-bold text-rose-700">
-                  <XCircle className="h-4 w-4" /> Erros ({comErros})
-                </h3>
-                <p className="text-xs text-slate-400">Linhas ignoradas — corrija e reenvie o arquivo.</p>
-              </div>
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
-                    <th className="px-4 py-2.5 font-semibold">Linha</th>
-                    <th className="px-4 py-2.5 font-semibold">Aluno</th>
-                    <th className="px-4 py-2.5 font-semibold">CPF</th>
-                    <th className="px-4 py-2.5 font-semibold">Turma</th>
-                    <th className="px-4 py-2.5 font-semibold">Motivo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.itens
-                    .filter((i) => i.status === "erro")
-                    .map((i) => (
-                      <tr key={`e${i.linha}`} className="border-b border-slate-50">
-                        <td className="px-4 py-2.5 font-mono text-slate-500">{i.linha}</td>
-                        <td className="px-4 py-2.5 text-slate-800">{i.nome}</td>
-                        <td className="px-4 py-2.5 text-slate-500">{i.cpf ?? "—"}</td>
-                        <td className="px-4 py-2.5 text-slate-600">{i.turma}</td>
-                        <td className="px-4 py-2.5">
-                          {i.motivos.map((m, idx) => (
-                            <p key={idx} className="text-rose-600">
-                              {m}
-                            </p>
-                          ))}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       )}
     </div>

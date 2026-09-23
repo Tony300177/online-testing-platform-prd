@@ -101,16 +101,18 @@
 - Cada unidade entrega sua planilha pelo canal combinado (envio direto, e-mail/WhatsApp para a coordenação e posterior upload, ou upload direto na plataforma).
 - A plataforma fornece um **modelo baixável** para padronizar a entrega.
 
-### 3.2 Duas visões de planilha
+### 3.2 Visão unificada de importação
 
-O cadastro é dividido em **duas planilhas complementares**:
+Todo o cadastro é feito em **uma tela** (`/admin/importar` — `src/components/import-tabs.tsx`) com **duas guias**:
 
-| Planilha | Conteúdo | Tela | Endpoint |
-|----------|----------|------|----------|
-| **A — Turmas e professores** | Uma linha por turma: código da escola, escola, turma, ano/série, turno, professor | `/admin/importar` | `POST /api/import` (valida) e `POST /api/import/commit` (grava) |
-| **B — Alunos** | Uma linha por aluno: nome, nº chamada, INEP, matrícula, CPF, nascimento, turma, turno | `/admin/alunos/importar` | `POST /api/alunos/import` e `POST /api/alunos/import/commit` |
+| Guia | Conteúdo | Tela | Endpoint |
+|------|----------|------|----------|
+| **Turmas** | Uma linha por turma: nome da escola (`NOME`), turma, ano/série, turno e professor (opcional) | `/admin/importar` › Turmas (`import-panel.tsx`) | `POST /api/import` (valida) e `POST /api/import/commit` (grava) |
+| **Alunos** | Uma linha por aluno: nome, nº chamada, INEP, matrícula, CPF, nascimento, turma, turno, ano/série e professor — **validado contra as turmas já cadastradas** | `/admin/importar` › Alunos (`import-unificado-panel.tsx`) | `POST /api/alunos/import` (valida) e `POST /api/alunos/import/commit` (valida + grava) |
 
-> **Fluxo recomendado:** importar primeiro a planilha de **turmas/professores (A)** — ela cria escolas, professores e turmas — e depois a de **alunos (B)**, que faz as matrículas vinculadas às turmas já existentes. A importação de alunos **bloqueia turmas que não pertençam à escola selecionada**.
+> A rota legada `/admin/alunos/importar` agora **redireciona** para `/admin/importar`.
+
+> **Fluxo recomendado:** importar primeiro a guia de **turmas/professores** — ela cria escolas, professores e turmas — e depois a de **alunos**, que faz as matrículas vinculadas às turmas já existentes. A importação de alunos **valida cada linha contra as turmas cadastradas da escola**: turma inexistente vira **erro** (linha ignorada) e Turma/Ano/Série/Turno/Professor divergentes viram **avisos** (linha importada, com conferência registrada).
 
 ### 3.3 Formato e cabeçalhos aceitos
 
@@ -120,12 +122,13 @@ Arquivos **`.xlsx`**, **`.xls`** e **`.csv`**, até **5.000 linhas** (turmas) e 
 
 | Campo canônico | Aliases | Obrigatório |
 |----------------|---------|-------------|
-| `CODIGO_ESCOLA` | `CÓDIGO ESCOLA`, `CÓDIGO DA ESCOLA`, `CÓDIGO`, `Nº`, `NÚMERO`, `NUM` | opcional |
-| `ESCOLA` | `ESCOLA`, `NOME DA ESCOLA`, `NOME DA UNIDADE`, `UNIDADE` | sim |
+| `ESCOLA` | **`NOME`**, `ESCOLA`, `NOME DA ESCOLA`, `NOME DA UNIDADE`, `UNIDADE` | sim (coluna `NOME` na planilha da secretaria) |
 | `TURMA` | `TURMA`, `NOME DA TURMA`, `CLASSE`, `SALA` | sim |
 | `ANO` | `ANO`, `SÉRIE`, `ANO/SÉRIE`, `TURMA_ANO` | sim |
 | `TURNO` | `TURNO`, `PERÍODO`, `HORÁRIO` | sim |
-| `PROFESSOR` | `PROFESSOR`, `NOME DO PROFESSOR`, `DOCENTE` | sim |
+| `PROFESSOR` | `PROFESSOR`, `NOME DO PROFESSOR`, `DOCENTE` | **opcional** |
+
+> **Critério vigente:** `NOME, NOME DA TURMA, ANO/SÉRIE, TURNO e PROFESSOR (opcional) — uma linha por turma.` A coluna legada `CÓDIGO ESCOLA`, quando presente, ainda é aceita (vincula a unidade oficial 01–19).
 
 **Planilha B — alunos (`src/lib/aluno-import.ts`):**
 
@@ -138,7 +141,9 @@ Arquivos **`.xlsx`**, **`.xls`** e **`.csv`**, até **5.000 linhas** (turmas) e 
 | `CPF` | `CPF`, `CPF DO ALUNO` | opcional (chave de dedupe) |
 | `DATA_NASCIMENTO` | `DATA DE NASCIMENTO`, `NASCIMENTO`, `DT NASCIMENTO`, `DATA` | opcional |
 | `TURMA` | `TURMA`, `NOME DA TURMA`, `CLASSE`, `SALA` | sim (salvo se a turma for definida no wizard) |
-| `TURNO` | `TURNO`, `PERÍODO` | opcional |
+| `TURNO` | `TURNO`, `PERÍODO` | opcional (conferido contra a turma) |
+| `ANO` | `ANO`, `SÉRIE`, `ANO/SÉRIE`, `TURMA_ANO` | opcional (conferido contra a turma) |
+| `PROFESSOR` | `PROFESSOR`, `NOME DO PROFESSOR`, `DOCENTE` | opcional (conferido contra a turma) |
 
 ---
 
@@ -146,20 +151,24 @@ Arquivos **`.xlsx`**, **`.xls`** e **`.csv`**, até **5.000 linhas** (turmas) e 
 
 ### 4.1 Wizard de importação
 
-O painel (`src/components/import-panel.tsx` para turmas; `src/components/import-alunos-panel.tsx` para alunos) segue **3 passos**:
+**Guias de alunos** (`src/components/import-unificado-panel.tsx`) segue o fluxo em **5 passos**:
 
-1. **Arquivo** — seleção opcional de escola (planilha única da secretaria pode conter várias unidades) + upload por clique/arrastar.
-2. **Validação** — dry-run: relatório com contadores, resumo por turma, erros e avisos linha a linha. **Nada é gravado.**
-3. **Concluído** — commit: confirmação no Supabase com resumo do que foi criado/atualizado/ignorado.
+1. **Receber arquivo** — upload por clique/arrastar do relatório XLSX da escola (1ª linha = cabeçalho; 1 linha por aluno).
+2. **Selecionar escola** — busca por código ou nome; lista das 19 unidades com código + nome. Aviso se a escola ainda não tem turmas cadastradas.
+3. **Confirmar importação** — card com escola (código + nome), arquivo e **alunos encontrados**; botões `Cancelar` / `Importar`.
+4. **Importação + validação** — checklist de conferência (Nome do aluno ✓, Turma existente ✓, Ano/Série ✓, Turno ✓, Professor ○ opcional) e verificação de duplicidades.
+5. **Resultado** — `✓ importados` (matrículas novas), `⚠ erros` (linhas ignoradas) e `⚠ duplicados` (já matriculados); botões `Ver erros` (detalhe por linha) e `Concluir`.
+
+A guia de **turmas** (`import-panel.tsx`) mantém o wizard anterior (arquivo → validação → commit).
 
 ### 4.2 Conferência e padronização
 
 | Dado | Procedimento |
 |------|--------------|
-| **Escola** | Confere `CÓDIGO ESCOLA`/nome contra as 19 unidades. Linhas **fora da escola selecionada são ignoradas** (contadas à parte). Nome divergente da oficial vira **aviso**. Código inexistente vira **erro**. |
+| **Escola** | Confere a coluna `NOME` (nome da escola) contra as 19 unidades. Linhas **fora da escola selecionada são ignoradas** (contadas à parte). Nome divergente da oficial vira **aviso**. Código inexistente (coluna legada) vira **erro**. |
 | **Ano/série** | Normaliza para `Maternal I/II`, `Pré I/II`, `1º–9º Ano` (aceita `5ºA`, `5`, `5 ANO`, etc.). Valor fora da lista = erro. |
 | **Turno** | Normaliza `Matutino/Vespertino/Noturno/Integral` (aceita `Mat`, `Manhã`, `1 - MATUTINO`, etc.). |
-| **Professor** | Remove prefixo numérico (`168 - NOME` → `NOME`). Nome com códigos divergentes = **aviso**. Entidade própria em `professores`. |
+| **Professor** | Remove prefixo numérico (`168 - NOME` → `NOME`). Nome com códigos divergentes = **aviso**. Entidade própria em `professores`. **Opcional** — turma pode ser cadastrada sem professor. |
 | **Aluno** | Nome em caixa alta; mínimo 3 caracteres. **CPF validado** (dígitos verificadores). **Data de nascimento** aceita `DD/MM/AAAA`, ISO e serial do Excel. |
 | **Matrícula** | Tupla `(aluno, turma, ano letivo)` **única** → idempotência (reimportar não duplica). |
 
@@ -269,16 +278,16 @@ Relatórios complementares existentes:
 
 | Item do fluxo | Situação atual | O que falta |
 |---------------|----------------|-------------|
-| Recebimento de planilha das escolas | 2 telas de importação + modelos baixáveis | Nada |
+| Recebimento de planilha das escolas | **Tela única** (`/admin/importar`) com guias Turmas e Alunos + modelo baixável; `/admin/alunos/importar` redireciona | Nada |
 | Importação + validação (turmas/professores) | Completa (dry-run, erros/avisos, idempotência) | Nada |
-| Importação + validação (alunos) | Completa (nome, CPF, INEP, matrícula, nascimento, nº chamada) | Nada |
+| Importação + validação (alunos) | Completa (nome, CPF, INEP, matrícula, nascimento, nº chamada) + **conferência Ano/Série, Turno e Professor contra a turma cadastrada** (avisos) | Nada |
 | **Etnia, gênero, bairro no import de alunos** | ✗ **Não lidos das planilhas** | Adicionar colunas `COR_RACA`/`SEXO`/`ETNIA` e `BAIRRO` ao `HEADER_ALIASES` de `src/lib/aluno-import.ts`, com normalização IBGE, e gravá-los em `alunos` no commit |
 | Persistência no Supabase | Schema completo + escrita idempotente | Sem preenchimento demográfico automático (ver acima) |
 | Dashboard Alunos/Etnia/Gênero/Bairros/Professores/Turmas | Completo (`/admin/estatisticas`, `/admin/alunos`) | Nada (popular dados) |
 | Filtros (escola, turma, bairro, etnia, gênero, professor) | Completo | Nada (popular dados) |
 | Relatórios PDF / Excel | Completo (base escolar + resultados) | Nada (popular dados) |
 
-> **Critério de aceite do fluxo:** a secretaria entrega as planilhas da unidade; o admin importa (A e depois B) e consegue ver nos dashboards a distribuição por etnia, gênero e bairro e emitir relatórios PDF/Excel com filtros, sem tocar no banco.
+> **Critério de aceite do fluxo:** a secretaria entrega as planilhas da unidade; o admin importa pela tela única (turmas e depois alunos) e consegue ver nos dashboards a distribuição por etnia, gênero e bairro e emitir relatórios PDF/Excel com filtros, sem tocar no banco.
 
 ---
 
@@ -289,7 +298,7 @@ Relatórios complementares existentes:
 3. **Idempotência** — reimportar o mesmo arquivo não duplica registros.
 4. **Dedupe de alunos** por CPF, fallback nome normalizado; senha padrão só em alunos novos.
 5. **Professor é entidade própria**; `turmas.professor` (texto) mantém compatibilidade.
-6. **Turmas de outra escola bloqueadas** na importação de alunos (linha vira erro).
+6. **Turmas inexistentes na escola = erro** na importação de alunos (linha ignorada, avisa para importar as turmas antes); divergências de Ano/Turno/Professor viram **avisos**.
 7. **Admin-only** para importação, dados demográficos e relatórios.
 8. **Cascata preservada** — excluir escola remove turmas e matrículas (`onDelete: cascade`).
 
@@ -304,8 +313,9 @@ Relatórios complementares existentes:
 | Importação turmas/professores (parse, validar, commit) | `src/lib/import.ts` |
 | Importação alunos (parse, validar, commit) | `src/lib/aluno-import.ts` |
 | Painel UI turmas/professores | `src/components/import-panel.tsx` |
-| Painel UI alunos | `src/components/import-alunos-panel.tsx` |
-| Telas | `src/app/admin/importar/page.tsx`, `src/app/admin/alunos/importar/page.tsx` |
+| Painel UI alunos (wizard único: arquivo → escola → confirma → resultado) | `src/components/import-unificado-panel.tsx` |
+| Abas da tela unificada | `src/components/import-tabs.tsx` |
+| Telas | `src/app/admin/importar/page.tsx` (unificada); `/admin/alunos/importar` redireciona |
 | APIs de importação | `src/app/api/import/route.ts`, `src/app/api/import/commit/route.ts`, `src/app/api/alunos/import/route.ts`, `src/app/api/alunos/import/commit/route.ts` |
 | Listagem/filtros/estatísticas | `src/lib/admin.ts`, `src/components/admin/filtros-bar.tsx` |
 | Dashboard desempenho | `src/lib/dashboard.ts`, `src/app/admin/dashboard/page.tsx` |

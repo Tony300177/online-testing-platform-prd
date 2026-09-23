@@ -37,7 +37,7 @@ const TURNO_SINONIMOS: Record<string, string> = {
 /** Cabeçalhos aceitos por campo (comparação normalizada: sem acento, sem º/ª, maiúsculas). */
 const HEADER_ALIASES: Record<string, string[]> = {
   CODIGO_ESCOLA: ["CODIGO ESCOLA", "CODIGO DA ESCOLA", "CODIGO", "Nº", "NUMERO", "NUM"],
-  ESCOLA: ["ESCOLA", "NOME DA ESCOLA", "NOME DA UNIDADE", "UNIDADE"],
+  ESCOLA: ["ESCOLA", "NOME DA ESCOLA", "NOME DA UNIDADE", "UNIDADE", "NOME"],
   TURMA: ["TURMA", "NOME DA TURMA", "TURMA (NOME)", "CLASSE", "SALA"],
   ANO: ["ANO", "SERIE", "SÉRIE", "ANO/SERIE", "ANO E SERIE", "TURMA_ANO", "TURMA ANO"],
   TURNO: ["TURNO", "PERIODO", "PERÍODO", "PERIODO AULA", "HORARIO", "HORÁRIO"],
@@ -397,7 +397,7 @@ export function parseImportRows(
       } else if (escolaCodigoPlanilha !== null) {
         motivos.push(`CÓDIGO de escola ${escolaCodigoPlanilha} não consta nas 19 unidades municipais`);
       } else if (escola.length < 3) {
-        motivos.push("CÓDIGO e/ou ESCOLA ausentes");
+        motivos.push("NOME da escola ausente ou muito curto");
       }
     }
 
@@ -417,7 +417,7 @@ export function parseImportRows(
     if (!ano || !ano.trim()) motivos.push("ANO ausente ou inválido");
     else if (!(ANOS_SERIES as readonly string[]).includes(ano)) motivos.push(`ANO "${ano}" não permitido`);
     if (!turno) motivos.push("TURNO ausente ou inválido");
-    if (professor.length < 2) motivos.push("PROFESSOR ausente ou muito curto");
+    // PROFESSOR é opcional (pode vir vazio na planilha da secretaria).
 
     return {
       linha,
@@ -568,18 +568,22 @@ export async function commitImport(
         escrita.escolasCriadas += 1;
       }
 
-      // ---- Professor ----
-      let professor = [...professorById.values()].find(
-        (p) => (item.professorCodigo !== null && p.codigo === item.professorCodigo) || normalize(p.nome) === normalize(item.professor)
-      );
-      if (!professor) {
-        const [ins] = await tx
-          .insert(professores)
-          .values({ nome: item.professor, codigo: item.professorCodigo ?? undefined })
-          .returning();
-        professor = ins;
-        professorById.set(ins.id, ins);
-        escrita.professoresCriados += 1;
+      // ---- Professor (opcional) ----
+      let professor: Professor | null = null;
+      if (item.professor) {
+        professor =
+          [...professorById.values()].find(
+            (p) => (item.professorCodigo !== null && p.codigo === item.professorCodigo) || normalize(p.nome) === normalize(item.professor)
+          ) ?? null;
+        if (!professor) {
+          const [ins] = await tx
+            .insert(professores)
+            .values({ nome: item.professor, codigo: item.professorCodigo ?? undefined })
+            .returning();
+          professor = ins;
+          professorById.set(ins.id, ins);
+          escrita.professoresCriados += 1;
+        }
       }
 
       // ---- Turma (chave natural: escola + nome + ano letivo) ----
@@ -594,9 +598,9 @@ export async function commitImport(
             nome: item.turma,
             ano: item.ano,
             turno: item.turno!,
-            professor: professor.nome,
-            professorCodigo: professor.codigo ?? undefined,
-            professorId: professor.id,
+            professor: professor?.nome ?? null,
+            professorCodigo: professor?.codigo ?? undefined,
+            professorId: professor?.id ?? undefined,
             anoLetivo: item.anoLetivo,
           })
           .returning();
@@ -609,7 +613,7 @@ export async function commitImport(
         const patch: Partial<typeof turmas.$inferInsert> = {};
         if (item.turno && turma.turno !== item.turno) patch.turno = item.turno;
         if (turma.ano !== item.ano) patch.ano = item.ano;
-        if (turma.professorId !== professor.id) {
+        if (professor && turma.professorId !== professor.id) {
           patch.professorId = professor.id;
           patch.professor = professor.nome;
           patch.professorCodigo = professor.codigo ?? undefined;

@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 // Conjunto de cabeçalhos conhecidos para auto-detecção (normalizados: uppercase, sem acento, sem ºª)
 const KNOWN_HEADER_SET = new Set([
   "CODIGO ESCOLA", "CODIGO DA ESCOLA", "CODIGO", "N", "NUMERO", "NUM",
-  "ESCOLA", "NOME DA ESCOLA", "NOME DA UNIDADE", "UNIDADE",
+  "ESCOLA", "NOME DA ESCOLA", "NOME DA UNIDADE", "UNIDADE", "NOME",
   "TURMA", "NOME DA TURMA", "CLASSE", "SALA",
   "ANO", "SERIE", "ANO/SERIE", "ANO E SERIE", "TURMA ANO",
   "TURNO", "PERIODO", "PERIODO AULA", "HORARIO",
@@ -63,8 +63,7 @@ type FileState = { name: string; size: number; rows: Record<string, string | num
 type Step = "arquivo" | "validacao" | "concluido";
 
 const TEMPLATE_HEADERS = [
-  "CÓDIGO ESCOLA",
-  "ESCOLA",
+  "NOME",
   "NOME DA TURMA",
   "ANO/SÉRIE",
   "TURNO",
@@ -72,8 +71,7 @@ const TEMPLATE_HEADERS = [
 ];
 
 const TEMPLATE_EXAMPLE = [
-  "11",
-  "CEM VASCO PAPA",
+  "CENTRO DE EDUCAÇÃO MUNICIPAL VASCO PAPA",
   "5º A",
   "5º Ano",
   "Matutino",
@@ -312,7 +310,7 @@ export default function ImportPanel() {
                 <Info className="h-3.5 w-3.5 text-indigo-500" /> Modelo de planilha
               </h3>
               <p className="mt-1 text-xs text-slate-500">
-                Colunas: CÓDIGO ESCOLA, ESCOLA, NOME DA TURMA, ANO/SÉRIE, TURNO e PROFESSOR (uma linha por turma).
+                Colunas: NOME, NOME DA TURMA, ANO/SÉRIE, TURNO e PROFESSOR opcional (uma linha por turma).
               </p>
               <button
                 type="button"
@@ -659,7 +657,7 @@ function ValidationHeader({ escola, report, anoLetivo }: { escola: string; repor
       <p className="mt-1 text-sm text-slate-600">
         Escola: <strong>{escola}</strong> · Ano letivo: <strong>{anoLetivo}</strong>
         {escola === "Todas as escolas" && (
-          <span className="text-slate-400"> — cada linha usa a escola de sua coluna CÓDIGO ESCOLA/ESCOLA</span>
+          <span className="text-slate-400"> — cada linha usa a escola de sua coluna NOME</span>
         )}
       </p>
       {hasErrors ? (

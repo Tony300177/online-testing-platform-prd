@@ -27,9 +27,11 @@ const HEADER_ALIASES: Record<string, string[]> = {
   DATA_NASCIMENTO: ["DATA DE NASCIMENTO", "DATA NASCIMENTO", "NASCIMENTO", "DT NASCIMENTO", "DATA"],
   TURMA: ["TURMA", "NOME DA TURMA", "CLASSE", "SALA"],
   TURNO: ["TURNO", "PERIODO", "PERÍODO", "TURNO AULA"],
+  ANO: ["ANO", "SERIE", "SÉRIE", "ANO/SÉRIE", "ANO E SÉRIE", "TURMA_ANO", "ANO SERIE", "SERIE ANO"],
+  PROFESSOR: ["PROFESSOR", "NOME DO PROFESSOR", "DOCENTE"],
 };
 
-export const ALUNO_FIELDS = ["NUMERO_CHAMADA", "NOME", "INEP", "MATRICULA", "CPF", "DATA_NASCIMENTO", "TURMA", "TURNO"] as const;
+export const ALUNO_FIELDS = ["NUMERO_CHAMADA", "NOME", "INEP", "MATRICULA", "CPF", "DATA_NASCIMENTO", "TURMA", "TURNO", "ANO", "PROFESSOR"] as const;
 export type AlunoImportField = (typeof ALUNO_FIELDS)[number];
 
 export function normalizeHeader(value: string): string {
@@ -152,6 +154,8 @@ export type ParsedAlunoRow = {
   numeroChamada: number | null;
   turma: string;
   turno: string | null;
+  ano: string | null;
+  professor: string | null;
   anoLetivo: number;
   motivos: string[];
   avisos: string[];
@@ -226,6 +230,8 @@ export function parseAlunoRows(rows: ImportAlunoLine[], options: AlunoImportOpti
     const numeroChamadaRaw = get("MATRICULA", row) || get("NUMERO_CHAMADA", row);
     const turma = get("TURMA", row).toUpperCase();
     const turnoRaw = get("TURNO", row);
+    const ano = get("ANO", row).toUpperCase() || null;
+    const professor = get("PROFESSOR", row).toUpperCase() || null;
 
     const numeroChamada =
       numeroChamadaRaw === "" || !/^\d+$/.test(numeroChamadaRaw)
@@ -251,6 +257,8 @@ export function parseAlunoRows(rows: ImportAlunoLine[], options: AlunoImportOpti
       numeroChamada,
       turma,
       turno: turnoRaw ? turnoRaw.toUpperCase() : null,
+      ano,
+      professor,
       anoLetivo,
       motivos,
       avisos: [],
@@ -281,8 +289,47 @@ async function loadAlunoSnapshot(escolaId: string, anoLetivo: number): Promise<A
   return { turmas: turmasRows, alunos: alunosRows, matriculas: filteredMatriculas };
 }
 
-function findTurmaNoEscola(turmasRows: Turma[], nome: string): Turma | null {
-  return turmasRows.find((t) => normalize(t.nome) === normalize(nome)) ?? null;
+function findTurmaNoEscola(turmasRows: Turma[], nome: string, ano?: string, turno?: string): Turma | null {
+  if (!nome) return null;
+  const byName = turmasRows.filter((t) => normalize(t.nome) === normalize(nome));
+  if (byName.length === 0) return null;
+  if (byName.length === 1) return byName[0];
+  const preferida = byName.find(
+    (t) => (!ano || normKey(t.ano) === normKey(ano)) && (!turno || normKey(t.turno) === normKey(turno))
+  );
+  return preferida ?? byName[0];
+}
+
+/** Chave normalizada para comparação de ano/série, turno e nomes (sem acentos/não-alfanuméricos). */
+function normKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+/** Remove prefixo numérico estilo "168 - JANETE" antes de comparar/guardar professores. */
+function nomeProfessor(value: string): string {
+  const idx = value.indexOf(" - ");
+  if (idx !== -1 && value.substring(idx + 3).trim().length >= 2) return value.substring(idx + 3).trim();
+  return value;
+}
+
+/** Compara Turma/Ano-Série/Turno/Professor da planilha contra a turma cadastrada (gera avisos). */
+function pushConferenciaTurma(avisos: string[], turmaRow: Turma, item: ParsedAlunoRow) {
+  if (item.ano && normKey(item.ano) !== normKey(turmaRow.ano || "")) {
+    avisos.push(`Ano/série na planilha ("${item.ano}") difere do cadastrado ("${turmaRow.ano}")`);
+  }
+  if (item.turno && normKey(item.turno) !== normKey(turmaRow.turno || "")) {
+    avisos.push(`Turno na planilha ("${item.turno}") difere do cadastrado ("${turmaRow.turno}")`);
+  }
+  if (item.professor && turmaRow.professor) {
+    if (normKey(nomeProfessor(item.professor)) !== normKey(nomeProfessor(turmaRow.professor))) {
+      avisos.push(`Professor na planilha ("${item.professor}") difere do cadastrado ("${turmaRow.professor}")`);
+    }
+  }
 }
 
 function findAlunoPorCPF(alunosRows: Aluno[], cpf: string): Aluno | null {
@@ -309,12 +356,12 @@ export async function validateAlunoImport(rows: ImportAlunoLine[], options: Alun
     const motivos = [...item.motivos];
     const avisos: string[] = [];
 
-    // Bloqueio de escola incorreta: turma precisa pertencer à escola selecionada.
+    // Bloqueio de escola incorreta: turma precisa existir na escola selecionada.
     let turmaRow: Turma | null = null;
     if (!options.turmaId) {
-      turmaRow = findTurmaNoEscola(snap.turmas, item.turma);
+      turmaRow = findTurmaNoEscola(snap.turmas, item.turma, item.ano ?? undefined, item.turno ?? undefined);
       if (!turmaRow && motivos.length === 0) {
-        motivos.push(`A turma "${item.turma}" não pertence à escola selecionada`);
+        motivos.push(`Turma "${item.turma}" não cadastrada nesta escola — importe antes a planilha de turmas`);
       }
     } else {
       turmaRow = snap.turmas.find((t) => t.id === options.turmaId) ?? null;
@@ -322,8 +369,9 @@ export async function validateAlunoImport(rows: ImportAlunoLine[], options: Alun
         avisos.push(`Turma no arquivo ("${item.turma}") difere da turma selecionada ("${turmaRow.nome}") — usada a selecionada`);
       }
     }
+    if (turmaRow && motivos.length === 0) pushConferenciaTurma(avisos, turmaRow, item);
 
-    const status: AlunoReportItem["status"] = motivos.length > 0 ? "erro" : "ok";
+    const status: AlunoReportItem["status"] = motivos.length > 0 ? "erro" : avisos.length > 0 ? "aviso" : "ok";
     itens.push({
       linha: item.linha,
       status,
@@ -369,20 +417,28 @@ export async function commitAlunoImport(rows: ImportAlunoLine[], options: AlunoI
   // Linhas ignoradas no commit (erros de parse ou turma fora da escola).
   let continuaIgnorados = 0;
 
+  const escritasComplementos = new Map<number, string[]>();
+
   await db.transaction(async (tx) => {
     for (const item of items) {
       const motivos = [...item.motivos];
+      const avisos: string[] = [];
 
       // ---- Turma (bloqueio de escola incorreta) ----
       let turmaRow: Turma | null = null;
       if (options.turmaId) {
         turmaRow = snap.turmas.find((t) => t.id === options.turmaId) ?? null;
+        if (turmaRow && item.turma && normalize(turmaRow.nome) !== normalize(item.turma)) {
+          avisos.push(`Turma no arquivo ("${item.turma}") difere da turma selecionada ("${turmaRow.nome}") — usada a selecionada`);
+        }
       } else {
-        turmaRow = findTurmaNoEscola(snap.turmas, item.turma);
+        turmaRow = findTurmaNoEscola(snap.turmas, item.turma, item.ano ?? undefined, item.turno ?? undefined);
         if (!turmaRow && motivos.length === 0) {
-          motivos.push(`A turma "${item.turma}" não pertence à escola selecionada`);
+          motivos.push(`Turma "${item.turma}" não cadastrada nesta escola — importe antes a planilha de turmas`);
         }
       }
+      if (turmaRow && motivos.length === 0) pushConferenciaTurma(avisos, turmaRow, item);
+      escritasComplementos.set(item.linha, avisos);
 
       // Linha com erro: registra e não grava.
       if (motivos.length > 0) {
@@ -466,14 +522,15 @@ export async function commitAlunoImport(rows: ImportAlunoLine[], options: AlunoI
   escrita.ignorados = continuaIgnorados;
   const itens: AlunoReportItem[] = items.map((item) => {
     const err = item.motivos.length > 0;
+    const avisos = escritasComplementos.get(item.linha) ?? [];
     return {
       linha: item.linha,
-      status: err ? "erro" : "ok",
+      status: err ? "erro" : avisos.length > 0 ? "aviso" : "ok",
       nome: item.nome,
       cpf: item.cpf,
       turma: item.turma,
       turno: item.turno ?? "",
-      motivos: item.motivos,
+      motivos: err ? item.motivos : avisos,
     };
   });
 

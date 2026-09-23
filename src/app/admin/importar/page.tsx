@@ -1,5 +1,5 @@
 import { UploadCloud } from "lucide-react";
-import ImportPanel from "@/components/import-panel";
+import ImportTabs from "@/components/import-tabs";
 import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -15,15 +15,15 @@ export default async function AdminImportarPage() {
         </span>
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Gestão de cadastros</p>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Importação de planilha</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Importação de planilhas</h1>
           <p className="text-sm text-slate-500">
-            Envie a planilha da escola (turmas, professores e alunos) e confirme a importação no Supabase.
+            Importe as turmas/professores e depois a planilha de alunos da escola (validada contra as turmas cadastradas).
           </p>
         </div>
       </div>
 
       <div className="mt-6">
-        <ImportPanel />
+        <ImportTabs />
       </div>
     </div>
   );

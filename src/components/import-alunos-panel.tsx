@@ -126,19 +126,9 @@ export default function ImportarAlunosPanel() {
       const raw: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
       if (raw.length < 2) throw new Error("Nenhuma linha de dados encontrada.");
 
-      // Detecta a linha do cabeçalho (criterio apenas como dica; sem bloquear)
-      const KNOWN = ["NOME", "INEP DO ALUNO", "TURMA", "MATRÍCULA"];
-      const norm = (s: string) =>
-        s.trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[ºª]/g, "").replace(/\s+/g, " ");
-      const headerIdx = raw.findIndex((row) => {
-        const hits = row.filter((c) => typeof c === "string" && c.trim() && KNOWN.some((k) => norm(k) === norm(String(c)))).length;
-        return hits >= 3;
-      });
-
-      // Sem correspondência: usa a primeira linha como cabeçalho (sem erro)
-      const headerRow = headerIdx >= 0 ? raw[headerIdx] : raw[0];
-      const headers = headerRow.map((h) => String(h || "").trim());
-      const dataRows = raw.slice(headerIdx >= 0 ? headerIdx + 1 : 1).filter((row) => row.some((c) => c !== "" && c !== null));
+      // Cabeçalho: sempre a primeira linha da planilha (sem critério de colunas)
+      const headers = raw[0].map((h) => String(h || "").trim());
+      const dataRows = raw.slice(1).filter((row) => row.some((c) => c !== "" && c !== null));
 
       const rows = dataRows.map((row: unknown[]) => {
         const obj: Record<string, string | number | null | undefined> = {};

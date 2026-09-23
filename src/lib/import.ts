@@ -26,12 +26,18 @@ const TURNO_SINONIMOS: Record<string, string> = {
   matutino: "Matutino",
   manha: "Matutino",
   manhã: "Matutino",
+  m: "Matutino",
   vespertino: "Vespertino",
   vesp: "Vespertino",
   tarde: "Vespertino",
+  t: "Vespertino",
+  v: "Vespertino",
   noturno: "Noturno",
   noite: "Noturno",
+  n: "Noturno",
   integral: "Integral",
+  "integral manha e tarde": "Integral",
+  "manha e tarde": "Integral",
 };
 
 /** Cabeçalhos aceitos por campo (comparação normalizada: sem acento, sem º/ª, maiúsculas). */
@@ -175,13 +181,14 @@ export function normalizeAnoSerie(value: string): string | null {
     .toUpperCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[º°]/g, "")
+    .replace(/[º°ª]/g, "")
     .replace(/\s+/g, " ");
   if (!v) return null;
-  // "5 A" / "1A" / "5 ANO" / "5o" / "5" → derive o ano
-  const m = v.match(/^(\d{1,2})\s*[O]?\s*A?N?O?\s*$/);
+  // "5 A" / "1A" / "5 ANO" / "5o" / "5" / "5 SÉRIE" / "ANO 5" / "SÉRIE 5" → derive o ano
+  const m = v.match(/^(?:(\d{1,2})\s*[O]?\s*A?N?O?\s*S?[EÊ]?R?I?E?\s*|ANO\s+(\d{1,2})|S[EÊ]RIE\s+(\d{1,2}))$/i);
   if (m) {
-    const n = Number(m[1]);
+    const raw = m[1] ?? m[2] ?? m[3];
+    const n = Number(raw);
     if (n >= 1 && n <= 9) return `${n}º Ano`;
   }
   // "MATERNAL I", "MATERNALII", "MATERNAL 2" → Educação infantil

@@ -17,9 +17,30 @@ import {
   School,
   Upload,
   XCircle,
+  Users,
 } from "lucide-react";
 import { ESCOLAS_MUNICIPAIS, escolaLabel, escolaTipo } from "@/lib/municipal-schools";
 import { cn } from "@/lib/utils";
+
+// Cabeçalhos típicos da planilha de ALUNOS — usados para sugerir a guia correta.
+const ALUNO_SMELL_HEADERS = new Set(
+  [
+    "NOME DO ALUNO", "ALUNO", "NOME COMPLETO",
+    "INEP", "INEP DO ALUNO", "CPF", "CPF DO ALUNO",
+    "MATRICULA", "Nº MATRICULA", "Nº CHAMADA", "NUMERO CHAMADA",
+    "DATA DE NASCIMENTO", "NASCIMENTO",
+  ].map((h) => h.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[ºª]/g, "").replace(/\s+/g, " "))
+);
+
+function smellHeader(value: string): string {
+  return value
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[ºª]/g, "")
+    .replace(/\s+/g, " ");
+}
 
 // Conjunto de cabeçalhos conhecidos para auto-detecção (normalizados: uppercase, sem acento, sem ºª)
 const KNOWN_HEADER_SET = new Set([
@@ -79,6 +100,8 @@ const TEMPLATE_EXAMPLE = [
 ];
 
 const ANOS_SERIES_TEMPLATE = [
+  "Berçário I",
+  "Berçário II",
   "Maternal I",
   "Maternal II",
   "Pré I",
@@ -132,9 +155,10 @@ function downloadCsv(csv: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export default function ImportPanel() {
+export default function ImportPanel({ onIrAlunos }: { onIrAlunos?: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("arquivo");
+  const [pareceAlunos, setPareceAlunos] = useState(false);
 
   // Filtro opcional: "Todas as escolas" (padrão) ou uma unidade específica
   const [escolaCodigo, setEscolaCodigo] = useState<number | null>(null);
@@ -186,6 +210,7 @@ export default function ImportPanel() {
 
       if (rows.length === 0) throw new Error("Nenhuma linha de dados encontrada após o cabeçalho.");
       setFile({ name: f.name, size: f.size, rows });
+      setPareceAlunos(headers.some((h: string) => ALUNO_SMELL_HEADERS.has(smellHeader(h))));
     } catch (e) {
       setFile(null);
       setError(e instanceof Error ? e.message : "Não foi possível ler o arquivo.");
@@ -249,6 +274,7 @@ export default function ImportPanel() {
     setReport(null);
     setError("");
     setBusy(null);
+    setPareceAlunos(false);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -256,6 +282,7 @@ export default function ImportPanel() {
     setReport(null);
     setError("");
     setStep("arquivo");
+    setPareceAlunos(false);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -267,6 +294,24 @@ export default function ImportPanel() {
 
       {/* ============ PASSO 1: ARQUIVO (planilha única da secretaria) ============ */}
       {step === "arquivo" && (
+        <div>
+          {pareceAlunos && (
+            <div className="mb-6 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-medium text-amber-800">
+                Este arquivo parece ser a planilha de <strong>ALUNOS</strong> (colunas de aluno). As turmas precisam estar
+                cadastradas primeiro — importe-o na guia <strong>Alunos</strong>.
+              </p>
+              {onIrAlunos && (
+                <button
+                  type="button"
+                  onClick={onIrAlunos}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+                >
+                  <Users className="h-3.5 w-3.5" /> Ir para a guia Alunos
+                </button>
+              )}
+            </div>
+          )}
         <div className="grid items-start gap-6 lg:grid-cols-2">
           <div className="space-y-4">
             <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5">
@@ -367,6 +412,7 @@ export default function ImportPanel() {
                 {busy !== "validar" && <ArrowRight className="h-4 w-4" />}
               </button>
             )}
+          </div>
           </div>
         </div>
       )}

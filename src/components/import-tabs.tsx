@@ -37,7 +37,7 @@ export default function ImportTabs() {
         </button>
       </div>
 
-      {guia === "turmas" ? <ImportPanel /> : <ImportUnificadoPanel />}
+      {guia === "turmas" ? <ImportPanel onIrAlunos={() => setGuia("alunos")} /> : <ImportUnificadoPanel />}
     </div>
   );
 }

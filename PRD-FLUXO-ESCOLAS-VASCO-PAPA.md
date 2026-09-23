@@ -166,7 +166,7 @@ A guia de **turmas** (`import-panel.tsx`) mantém o wizard anterior (arquivo →
 | Dado | Procedimento |
 |------|--------------|
 | **Escola** | Confere a coluna `NOME` (nome da escola) contra as 19 unidades. Linhas **fora da escola selecionada são ignoradas** (contadas à parte). Nome divergente da oficial vira **aviso**. Código inexistente (coluna legada) vira **erro**. |
-| **Ano/série** | Normaliza para `Maternal I/II`, `Pré I/II`, `1º–9º Ano` (aceita `5ºA`, `5`, `5 ANO`, etc.). Valor fora da lista = erro. |
+| **Ano/série** | Normaliza para `Berçário I/II`, `Maternal I/II`, `Pré I/II`, `1º–9º Ano` (aceita `5ºA`, `5`, `5 ANO`, `5ª SÉRIE`, `BERÇÁRIO I`, etc.). Valor fora da lista = erro. |
 | **Turno** | Normaliza `Matutino/Vespertino/Noturno/Integral` (aceita `Mat`, `Manhã`, `1 - MATUTINO`, etc.). |
 | **Professor** | Remove prefixo numérico (`168 - NOME` → `NOME`). Nome com códigos divergentes = **aviso**. Entidade própria em `professores`. **Opcional** — turma pode ser cadastrada sem professor. |
 | **Aluno** | Nome em caixa alta; mínimo 3 caracteres. **CPF validado** (dígitos verificadores). **Data de nascimento** aceita `DD/MM/AAAA`, ISO e serial do Excel. |

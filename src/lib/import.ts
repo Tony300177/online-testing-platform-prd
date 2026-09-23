@@ -122,6 +122,8 @@ function normalizeTurno(value: string): Turno | null {
  * ============================================================ */
 
 export const ANOS_SERIES = [
+  "Berçário I",
+  "Berçário II",
   "Maternal I",
   "Maternal II",
   "Pré I",
@@ -191,6 +193,9 @@ export function normalizeAnoSerie(value: string): string | null {
     const n = Number(raw);
     if (n >= 1 && n <= 9) return `${n}º Ano`;
   }
+  // "BERÇÁRIO I", "BERÇARIOI", "BERÇÁRIO 2" → Educação infantil
+  const bc = v.match(/^BER[ÇC]ARIO\s*(I{1,2}|2)?$/);
+  if (bc) return `Berçário ${bc[1] && (bc[1].length === 2 || bc[1] === "2") ? "II" : "I"}`;
   // "MATERNAL I", "MATERNALII", "MATERNAL 2" → Educação infantil
   const mi = v.match(/^MATERNAL\s*(I{1,2}|2)?$/);
   if (mi) return `Maternal ${mi[1] && (mi[1].length === 2 || mi[1] === "2") ? "II" : "I"}`;

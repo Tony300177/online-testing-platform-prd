@@ -291,7 +291,8 @@ async function loadAlunoSnapshot(escolaId: string, anoLetivo: number): Promise<A
 
 function findTurmaNoEscola(turmasRows: Turma[], nome: string, ano?: string, turno?: string): Turma | null {
   if (!nome) return null;
-  const byName = turmasRows.filter((t) => normalize(t.nome) === normalize(nome));
+  // Compara por chave alfanumérica: "PRE I - B" == "PRÉ I B" == "pre i-b"
+  const byName = turmasRows.filter((t) => normKey(t.nome) === normKey(nome));
   if (byName.length === 0) return null;
   if (byName.length === 1) return byName[0];
   const preferida = byName.find(

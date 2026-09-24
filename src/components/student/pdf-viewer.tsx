@@ -141,7 +141,7 @@ export default function PdfViewer({ url, title }: { url: string; title?: string 
 
   if (loading) {
     return (
-      <div className="flex h-[70vh] items-center justify-center rounded-2xl border border-slate-200 bg-white">
+      <div className="flex h-[calc(100vh-11rem)] items-center justify-center rounded-2xl border border-slate-200 bg-white">
         <div className="text-center">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-indigo-600" />
           <p className="mt-2 text-sm font-medium text-slate-500">Carregando PDF...</p>
@@ -152,7 +152,7 @@ export default function PdfViewer({ url, title }: { url: string; title?: string 
 
   if (error) {
     return (
-      <div className="flex h-[70vh] items-center justify-center rounded-2xl border border-slate-200 bg-white">
+      <div className="flex h-[calc(100vh-11rem)] items-center justify-center rounded-2xl border border-slate-200 bg-white">
         <div className="max-w-sm text-center">
           <FileWarning className="mx-auto h-10 w-10 text-rose-400" />
           <p className="mt-3 text-sm font-medium text-slate-700">{error}</p>
@@ -228,7 +228,7 @@ export default function PdfViewer({ url, title }: { url: string; title?: string 
 
       <div className="grid gap-0 sm:grid-cols-[90px_minmax(0,1fr)]">
         {/* Miniaturas */}
-        <div className="hidden max-h-[70vh] flex-col overflow-y-auto border-r border-slate-200 bg-slate-50 p-2 sm:flex">
+        <div className="hidden max-h-[calc(100vh-11rem)] flex-col overflow-y-auto border-r border-slate-200 bg-slate-50 p-2 sm:flex">
           <div
             ref={(el) => {
               if (el && el.clientWidth > 0) setThumbSize(el.clientWidth);
@@ -257,7 +257,7 @@ export default function PdfViewer({ url, title }: { url: string; title?: string 
         </div>
 
         {/* Página */}
-        <div ref={wrapRef} className="max-h-[70vh] overflow-auto bg-slate-100 p-3">
+        <div ref={wrapRef} className="max-h-[calc(100vh-11rem)] overflow-auto bg-slate-100 p-3">
           <div className="flex min-h-full items-start justify-center">
             <canvas ref={canvasRef} className="max-w-none rounded-md shadow" />
           </div>

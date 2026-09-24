@@ -916,8 +916,8 @@ export default function ExamPlayer({ code }: { code: string }) {
               </button>
             </div>
 
-            {/* PDF 70% + Gabarito 30% */}
-            <div className="grid items-start gap-6 lg:grid-cols-[2.33fr_1fr]">
+            {/* PDF ampliado + Gabarito reduzido */}
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
               <div className={cn("lg:block", mobileTab !== "pdf" && "hidden")}>
                 <div className="lg:sticky lg:top-24">
                   <PdfViewer url={pdfUrl} title={exam?.arquivoNome ?? undefined} />

@@ -351,7 +351,7 @@ async function loadAlunoSnapshot(escolaId: string, anoLetivo: number): Promise<A
   return { turmas: turmasRows, alunos: alunosRows, matriculas: filteredMatriculas };
 }
 
-function findTurmaNoEscola(turmasRows: Turma[], nome: string, ano?: string, turno?: string): Turma | null {
+export function findTurmaNoEscola(turmasRows: Turma[], nome: string, ano?: string, turno?: string): Turma | null {
   if (!nome) return null;
   // Compara por chave alfanumérica: "PRE I - B" == "PRÉ I B" == "pre i-b"
   const byName = turmasRows.filter((t) => normKey(t.nome) === normKey(nome));
@@ -424,7 +424,11 @@ export async function validateAlunoImport(rows: ImportAlunoLine[], options: Alun
     if (!options.turmaId) {
       turmaRow = findTurmaNoEscola(snap.turmas, item.turma, item.ano ?? undefined, item.turno ?? undefined);
       if (!turmaRow && motivos.length === 0) {
-        motivos.push(`Turma "${item.turma}" não cadastrada nesta escola — importe antes a planilha de turmas`);
+        if (options.permitirCriacaoTurmas) {
+          avisos.push(`Turma "${item.turma}" será criada nesta importação`);
+        } else {
+          motivos.push(`Turma "${item.turma}" não cadastrada nesta escola — importe antes a planilha de turmas`);
+        }
       }
     } else {
       turmaRow = snap.turmas.find((t) => t.id === options.turmaId) ?? null;

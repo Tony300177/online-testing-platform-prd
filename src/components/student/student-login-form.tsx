@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, Loader2, Lock, LogIn, MapPin, UserRound, Users } from "lucide-react";
+import { KeyRound, Loader2, Lock, LogIn, MapPin, School, UserRound, Users } from "lucide-react";
 import { ESCOLAS_MUNICIPAIS, escolaLabel } from "@/lib/municipal-schools";
 
 type SchoolAluno = { id: string; nome: string; numeroChamada: number | null };
@@ -94,10 +94,14 @@ export default function StudentLoginForm() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* Coluna esquerda: escola + turma */}
-        <div className="space-y-4">
+    <form onSubmit={submit} className="space-y-5">
+      <div className="grid items-stretch gap-5 sm:grid-cols-2">
+        {/* Caixa 1 — Acesso escolar (esquerda) */}
+        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <School className="h-4 w-4 text-indigo-500" /> Acesso escolar
+          </h2>
+
           <div>
             <label className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-700">
               <MapPin className="h-3.5 w-3.5 text-slate-400" /> Escola
@@ -153,11 +157,15 @@ export default function StudentLoginForm() {
           </div>
         </div>
 
-        {/* Coluna direita: nome + senha */}
-        <div className="space-y-4">
+        {/* Caixa 2 — Dados do aluno (direita) */}
+        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <UserRound className="h-4 w-4 text-indigo-500" /> Dados do aluno
+          </h2>
+
           <div>
             <label className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-700">
-              <UserRound className="h-3.5 w-3.5 text-slate-400" /> Nome
+              <UserRound className="h-3.5 w-3.5 text-slate-400" /> Nome do aluno
             </label>
             <select
               value={alunoId}

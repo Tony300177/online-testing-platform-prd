@@ -138,6 +138,16 @@ export const ANOS_SERIES = [
   "8º Ano",
   "9º Ano",
   "AEE",
+  "1º Ano 1º Ciclo",
+  "2º Ano 1º Ciclo",
+  "3º Ano 1º Ciclo",
+  "4º Ano 2º Ciclo",
+  "5º Ano 2º Ciclo",
+  "7º Ano 3º Ciclo",
+  "8º Ano 3º Ciclo",
+  "9º Ano 3º Ciclo",
+  "1º Ano - 1º Seg.",
+  "Pré - Unificada",
 ] as const;
 
 const ANO_ALIASES: Record<string, string> = {
@@ -194,6 +204,16 @@ export function normalizeAnoSerie(value: string): string | null {
     const n = Number(raw);
     if (n >= 1 && n <= 9) return `${n}º Ano`;
   }
+  // "1º ANO 1º CICLO" / "7º ANO 3º CICLO" / "1º ANO - 1º SEG." → Educação por ciclos
+  const ciclo = v.match(/^(\d{1,2})\s*ANO\s*[-–—]?\s*(\d{1,2})\s*[º°]?\s*CICLO$/i);
+  if (ciclo) return `${ciclo[1]}º Ano ${ciclo[2]}º Ciclo`;
+  const seg = v.match(/^(\d{1,2})\s*ANO\s*[-–—]\s*(\d{1,2})\s*SEG/i);
+  if (seg) return `${seg[1]}º Ano - ${seg[2]}º Seg.`;
+  // "1 ANO 1 SEG" → "1º Ano - 1º Seg."
+  // "ATENDIMENTO EDUCACIONAL ESPECIALIZADO" → "AEE"
+  if (v.includes("ATENDIMENTO EDUCACIONAL") || v.includes("EDUCACAO ESPECIAL")) return "AEE";
+  // "PRÉ - UNIFICADA" / "PRE - UNIFICADA" → "Pré - Unificada"
+  if (/^PRE\s*[-–—]?\s*UNIFICADA/.test(v)) return "Pré - Unificada";
   // "BERÇÁRIO I", "BERÇARIOI", "BERÇÁRIO 2" → Educação infantil
   const bc = v.match(/^BER[ÇC]ARIO\s*(I{1,2}|2)?$/);
   if (bc) return `Berçário ${bc[1] && (bc[1].length === 2 || bc[1] === "2") ? "II" : "I"}`;

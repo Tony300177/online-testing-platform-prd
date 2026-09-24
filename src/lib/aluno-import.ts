@@ -27,14 +27,15 @@ const HEADER_ALIASES: Record<string, string[]> = {
   DATA_NASCIMENTO: ["DATA DE NASCIMENTO", "DATA NASCIMENTO", "NASCIMENTO", "DT NASCIMENTO", "DATA"],
   SEXO: ["SEXO", "GENERO", "GÊNERO", "SEXO/GÊNERO", "SEXO E GÊNERO", "GÊNERO DO ALUNO"],
   ETNIA: ["ETNIA", "COR", "RACA", "RAÇA", "COR RACA", "COR/RAÇA", "COR/RACA", "RACA/COR", "RAÇA/COR", "COR OU RAÇA", "COR ETNIA", "COR/ETNIA"],
-  BAIRRO: ["BAIRRO", "BAIRRO DE RESIDENCIA", "BAIRRO DE RESIDÊNCIA", "BAIRRO DO ALUNO", "RESIDENCIA", "RESIDÊNCIA", "BAIRRO DO ESTUDANTE"],
+  BAIRRO: ["BAIRRO", "BAIRRO DE RESIDENCIA", "BAIRRO DE RESIDÊNCIA", "BAIRRO DO ALUNO", "RESIDENCIA", "RESIDÊNCIA", "BAIRRO DO ESTUDANTE", "ENDERECO", "ENDEREÇO", "ENDERECO (BAIRRO)", "ENDEREÇO (BAIRRO / LINHA RURAL)", "ENDEREÇO (SOMENTE BAIRRO E LINHA RURAL)", "ENDEREÇO SOMENTE O BAIRRO E LINHA RURAL", "LOCALIDADE"],
+  ESCOLA: ["ESCOLA", "NOME DA ESCOLA", "NOME DA UNIDADE", "UNIDADE", "NOME DA ESCOLA (BAIRRO)", "UNIDADE ESCOLAR"],
   TURMA: ["TURMA", "NOME DA TURMA", "CLASSE", "SALA"],
   TURNO: ["TURNO", "PERIODO", "PERÍODO", "TURNO AULA"],
   ANO: ["ANO", "SERIE", "SÉRIE", "ANO/SÉRIE", "ANO E SÉRIE", "TURMA_ANO", "ANO SERIE", "SERIE ANO"],
   PROFESSOR: ["PROFESSOR", "NOME DO PROFESSOR", "DOCENTE"],
 };
 
-export const ALUNO_FIELDS = ["NUMERO_CHAMADA", "NOME", "INEP", "MATRICULA", "CPF", "DATA_NASCIMENTO", "SEXO", "ETNIA", "BAIRRO", "TURMA", "TURNO", "ANO", "PROFESSOR"] as const;
+export const ALUNO_FIELDS = ["NUMERO_CHAMADA", "NOME", "INEP", "MATRICULA", "CPF", "DATA_NASCIMENTO", "SEXO", "ETNIA", "BAIRRO", "ESCOLA", "TURMA", "TURNO", "ANO", "PROFESSOR"] as const;
 export type AlunoImportField = (typeof ALUNO_FIELDS)[number];
 
 export function normalizeHeader(value: string): string {
@@ -47,7 +48,7 @@ export function normalizeHeader(value: string): string {
     .replace(/\s+/g, " ");
 }
 
-function mapHeaders(headers: string[]): Map<AlunoImportField, string> {
+export function mapHeaders(headers: string[]): Map<AlunoImportField, string> {
   const map = new Map<AlunoImportField, string>();
   const aliasIndex = new Map<string, AlunoImportField>();
   for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
@@ -154,15 +155,16 @@ export function normalizeEtnia(value: string): string | null {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ");
   const ETNIAS_IBGE: [string[], string][] = [
-    [["BRANCA", "BRANCO"], "Branca"],
-    [["PRETA", "PRETO", "NEGRA", "NEGRO"], "Preta"],
-    [["PARDA", "PARDO"], "Parda"],
-    [["AMARELA", "AMARELO"], "Amarela"],
-    [["INDIGENA", "INDIGENO", "INDIGENA/BRASILEIRA"], "Indígena"],
+    [["BRANCA", "BRANCO", "B"], "Branca"],
+    [["PRETA", "PRETO", "NEGRA", "NEGRO", "PT"], "Preta"],
+    [["PARDA", "PARDO", "PD"], "Parda"],
+    [["AMARELA", "AMARELO", "A"], "Amarela"],
+    [["INDIGENA", "INDIGENO", "INDIGENA/BRASILEIRA", "I"], "Indígena"],
   ];
   for (const [aliases, label] of ETNIAS_IBGE) {
     if (aliases.includes(v)) return label;
   }
+  if (v === "ND") return null;
   return null;
 }
 
@@ -192,6 +194,7 @@ export type ParsedAlunoRow = {
   sexo: string | null;
   etnia: string | null;
   bairro: string | null;
+  escola: string;
   turma: string;
   turno: string | null;
   ano: string | null;
@@ -241,6 +244,8 @@ export type AlunoImportOptions = {
   escolaId: string;
   turmaId?: string;
   anoLetivo?: number;
+  /** Turmas adicionais que serão criadas após a validação (padrão: não valida presença). */
+  permitirCriacaoTurmas?: boolean;
   /** Mapa nome-do-campo → cabeçalho real na planilha (ex.: NOME, TURMA, ANO, TURNO, PROFESSOR). */
   colunas?: Record<string, string>;
 };
@@ -284,6 +289,7 @@ export function parseAlunoRows(rows: ImportAlunoLine[], options: AlunoImportOpti
     if (etniaRaw && !etnia) avisos.push(`ETNIA/COR "${etniaRaw}" não reconhecida — use Branca, Preta, Parda, Amarela ou Indígena`);
 
     const bairro = cleanText(get("BAIRRO", row)) || null;
+    const escola = get("ESCOLA", row).toUpperCase() || "";
 
     const numeroChamada =
       numeroChamadaRaw === "" || !/^\d+$/.test(numeroChamadaRaw)
@@ -310,6 +316,7 @@ export function parseAlunoRows(rows: ImportAlunoLine[], options: AlunoImportOpti
       sexo,
       etnia,
       bairro,
+      escola,
       turma,
       turno: turnoRaw ? turnoRaw.toUpperCase() : null,
       ano,

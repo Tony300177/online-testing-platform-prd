@@ -137,6 +137,7 @@ export const ANOS_SERIES = [
   "7º Ano",
   "8º Ano",
   "9º Ano",
+  "AEE",
 ] as const;
 
 const ANO_ALIASES: Record<string, string> = {

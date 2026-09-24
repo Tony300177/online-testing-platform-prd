@@ -1,49 +1,29 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  ChevronLeft,
-  ChevronRight,
-  FileWarning,
-  Loader2,
-  Maximize2,
-  Minus,
-  Plus,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { FileWarning, Loader2 } from "lucide-react";
 
 // pdf.js é carregado dinamicamente no client (evita ReferenceError de DOMMatrix no SSR)
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 3;
-const SCALE_STEP = 0.25;
-
 /**
- * Visualizador de PDF integrado (pdf.js) com zoom, navegação de páginas,
- * miniaturas e ajuste à largura — tudo dentro da plataforma.
+ * Visualizador de PDF integrado (pdf.js) para o aluno — mostra todas as
+ * páginas empilhadas com barra de rolagem, sem botões ou ícones de navegação.
  */
 export default function PdfViewer({ url, title }: { url: string; title?: string }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const pagesRef = useRef<HTMLDivElement | null>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
-  const [page, setPage] = useState(1);
-  const [scale, setScale] = useState(1);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [fitWidth, setFitWidth] = useState(true);
-  const [thumbSize, setThumbSize] = useState(0);
-
-  const numPages = pdf?.numPages ?? 0;
 
   // Carrega o documento
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError("");
-    setPdf(null);
-    setPage(1);
     (async () => {
+      setLoading(true);
+      setError("");
+      setPdf(null);
       try {
         const pdfjs = await import("pdfjs-dist");
         pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -74,70 +54,38 @@ export default function PdfViewer({ url, title }: { url: string; title?: string 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
-  // Renderiza a página atual
+  // Renderiza todas as páginas empilhadas, ajustadas à largura do container
   useEffect(() => {
-    if (!pdf || !canvasRef.current) return;
+    if (!pdf || !wrapRef.current || !pagesRef.current) return;
     let cancelled = false;
-    let renderTask: RenderTask | null = null;
+    const tasks: RenderTask[] = [];
+
+    const pagesEl = pagesRef.current;
+    pagesEl.innerHTML = "";
+    const containerWidth = wrapRef.current.clientWidth - 24;
 
     (async () => {
-      const p = await pdf.getPage(page);
-      const base = p.getViewport({ scale: 1 });
-      const containerWidth = wrapRef.current?.clientWidth ?? 800;
-      let finalScale = scale;
-      if (fitWidth) finalScale = containerWidth / base.width;
-      finalScale = Math.min(Math.max(finalScale, MIN_SCALE), MAX_SCALE);
-      const viewport = p.getViewport({ scale: finalScale });
-
-      const canvas = canvasRef.current!;
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      renderTask = p.render({ canvas, viewport });
-      await renderTask.promise;
-      if (cancelled) return;
-      // sincroniza o zoom exibido
-      setScale(finalScale);
+      for (let n = 1; n <= pdf.numPages && !cancelled; n++) {
+        const p = await pdf.getPage(n);
+        const base = p.getViewport({ scale: 1 });
+        const scale = containerWidth / base.width;
+        const viewport = p.getViewport({ scale });
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.className = "max-w-full rounded-md shadow";
+        const task = p.render({ canvas, viewport });
+        tasks.push(task);
+        pagesEl.appendChild(canvas);
+        await task.promise;
+      }
     })().catch(() => {});
 
     return () => {
       cancelled = true;
-      renderTask?.cancel();
+      tasks.forEach((t) => t.cancel());
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdf, page, scale, fitWidth]);
-
-  // Gera miniaturas de todas as páginas
-  useEffect(() => {
-    if (!pdf || thumbSize <= 0) return;
-    let cancelled = false;
-    const id = window.setTimeout(async () => {
-      for (let n = 1; n <= pdf.numPages && !cancelled; n++) {
-        const p = await pdf.getPage(n);
-        const vp = p.getViewport({ scale: 0.35 });
-        const el = document.getElementById(`thumb-${n}`);
-        if (!el || el.children.length > 0) continue;
-        const canvas = document.createElement("canvas");
-        canvas.width = vp.width;
-        canvas.height = vp.height;
-        await p.render({ canvas, viewport: vp }).promise;
-        el.appendChild(canvas);
-        canvas.className = "w-full h-auto rounded";
-      }
-    }, 120);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(id);
-    };
-  }, [pdf, thumbSize]);
-
-  const zoomIn = () => {
-    setFitWidth(false);
-    setScale((s) => Math.min(s + SCALE_STEP, MAX_SCALE));
-  };
-  const zoomOut = () => {
-    setFitWidth(false);
-    setScale((s) => Math.max(s - SCALE_STEP, MIN_SCALE));
-  };
+  }, [pdf]);
 
   if (loading) {
     return (
@@ -163,106 +111,9 @@ export default function PdfViewer({ url, title }: { url: string; title?: string 
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      {/* Barra de ferramentas */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(p - 1, 1))}
-            disabled={page <= 1}
-            title="Página anterior"
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 disabled:opacity-40"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <span className="min-w-[7rem] text-center text-xs font-semibold text-slate-600">
-            Página {page} de {numPages || 1}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(p + 1, numPages))}
-            disabled={page >= numPages}
-            title="Página seguinte"
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 disabled:opacity-40"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={zoomOut}
-            title="Diminuir zoom"
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100"
-          >
-            <Minus className="h-4 w-4" />
-          </button>
-          <span className="w-12 text-center text-xs font-semibold text-slate-600">
-            {Math.round(scale * 100)}%
-          </span>
-          <button
-            type="button"
-            onClick={zoomIn}
-            title="Aumentar zoom"
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setFitWidth(true);
-            }}
-            title="Ajustar à largura"
-            className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-lg border transition",
-              fitWidth
-                ? "border-indigo-300 bg-indigo-100 text-indigo-700"
-                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
-            )}
-          >
-            <Maximize2 className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      <div className="grid gap-0 sm:grid-cols-[90px_minmax(0,1fr)]">
-        {/* Miniaturas */}
-        <div className="hidden max-h-[calc(100vh-11rem)] flex-col overflow-y-auto border-r border-slate-200 bg-slate-50 p-2 sm:flex">
-          <div
-            ref={(el) => {
-              if (el && el.clientWidth > 0) setThumbSize(el.clientWidth);
-            }}
-            className="flex flex-col gap-2"
-          >
-            {Array.from({ length: numPages }).map((_, i) => {
-              const n = i + 1;
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setPage(n)}
-                  className={cn(
-                    "rounded-lg border p-1 transition",
-                    page === n ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-white hover:border-indigo-300"
-                  )}
-                  title={`Página ${n}`}
-                >
-                  <div id={`thumb-${n}`} />
-                  <span className="mt-0.5 block text-center text-[10px] font-semibold text-slate-500">{n}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Página */}
-        <div ref={wrapRef} className="max-h-[calc(100vh-11rem)] overflow-auto bg-slate-100 p-3">
-          <div className="flex min-h-full items-start justify-center">
-            <canvas ref={canvasRef} className="max-w-none rounded-md shadow" />
-          </div>
-          {title && <p className="mt-2 text-center text-[11px] text-slate-400">{title}</p>}
-        </div>
+      <div ref={wrapRef} className="max-h-[calc(100vh-11rem)] overflow-auto bg-slate-100 p-3">
+        <div ref={pagesRef} className="flex flex-col items-center gap-4"></div>
+        {title && <p className="mt-2 text-center text-[11px] text-slate-400">{title}</p>}
       </div>
     </div>
   );

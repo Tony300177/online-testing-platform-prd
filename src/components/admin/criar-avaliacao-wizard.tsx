@@ -172,6 +172,13 @@ export default function CriarAvaliacaoWizard() {
     setTurmaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
+  const todasTurmas = useMemo(() => escolas.flatMap((e) => e.turmas.map((t) => t.id)), [escolas]);
+  const tudoSelecionado = todasTurmas.length > 0 && todasTurmas.every((t) => turmaIds.includes(t));
+
+  function toggleTudo() {
+    setTurmaIds(tudoSelecionado ? [] : todasTurmas);
+  }
+
   // ---- Questões / gabarito ----
   const updateQuestao = (key: string, patch: Partial<QuestaoDraft>) =>
     setQuestoes((d) => d.map((q) => (q.key === key ? { ...q, ...patch } : q)));
@@ -713,10 +720,32 @@ export default function CriarAvaliacaoWizard() {
       {/* Passo 3: Selecionar Escolas */}
       {step === 3 && (
         <section>
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <Building2 className="h-4 w-4 text-indigo-600" />
-            Selecione as escolas e turmas participantes
-          </h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <Building2 className="h-4 w-4 text-indigo-600" />
+              Selecione as escolas e turmas participantes
+            </h2>
+            <button
+              type="button"
+              onClick={toggleTudo}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition",
+                tudoSelecionado
+                  ? "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  : "border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+              )}
+            >
+              {tudoSelecionado ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Limpar seleção
+                </>
+              ) : (
+                <>
+                  <Check className="h-3.5 w-3.5" /> Selecionar todas as turmas
+                </>
+              )}
+            </button>
+          </div>
           {escolas.length === 0 ? (
             <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
               Nenhuma escola cadastrada. Importe as escolas pelas planilhas em &quot;Gestão de cadastros&quot;.

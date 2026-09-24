@@ -6,18 +6,20 @@ import {
   ArrowLeft,
   ArrowRight,
   Building2,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   ClipboardList,
   FileText,
   Loader2,
+  Minus,
   Plus,
   Rocket,
   School,
+  Send,
   Trash2,
   UserCheck,
-  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -57,10 +59,9 @@ type EscolaOption = {
 const STEPS = [
   { num: 1, label: "Dados e PDF", icon: FileText },
   { num: 2, label: "Gabarito", icon: ClipboardList },
-  { num: 3, label: "Escolas", icon: Building2 },
-  { num: 4, label: "Turmas", icon: Users },
-  { num: 5, label: "Participantes", icon: UserCheck },
-  { num: 6, label: "Publicar", icon: Rocket },
+  { num: 3, label: "Selecionar Escolas", icon: Building2 },
+  { num: 4, label: "Confirmar Destinos", icon: Send },
+  { num: 5, label: "Publicar", icon: Rocket },
 ];
 
 const KEY = () => Math.random().toString(36).slice(2);
@@ -79,6 +80,24 @@ const EMPTY_QUESTION = (): QuestaoDraft => ({
   ],
 });
 
+function TreeCheckbox({ checked, partial }: { checked: boolean; partial?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 text-white transition",
+        checked
+          ? "border-indigo-600 bg-indigo-600"
+          : partial
+            ? "border-indigo-400 bg-indigo-100"
+            : "border-slate-300 bg-white"
+      )}
+    >
+      {checked && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+      {!checked && partial && <Minus className="h-3.5 w-3.5 text-indigo-600" strokeWidth={3} />}
+    </span>
+  );
+}
+
 export default function CriarAvaliacaoWizard() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -94,7 +113,6 @@ export default function CriarAvaliacaoWizard() {
   const [showPreview, setShowPreview] = useState(false);
   const [questoes, setQuestoes] = useState<QuestaoDraft[]>([EMPTY_QUESTION()]);
   const [escolas, setEscolas] = useState<EscolaOption[]>([]);
-  const [escolaIds, setEscolaIds] = useState<string[]>([]);
   const [turmaIds, setTurmaIds] = useState<string[]>([]);
 
   const [saving, setSaving] = useState(false);
@@ -122,8 +140,8 @@ export default function CriarAvaliacaoWizard() {
   }, []);
 
   const escolasSelecionadas = useMemo(
-    () => escolas.filter((e) => escolaIds.includes(e.id)),
-    [escolas, escolaIds]
+    () => escolas.filter((e) => e.turmas.some((t) => turmaIds.includes(t.id))),
+    [escolas, turmaIds]
   );
 
   const turmasDisponiveis = useMemo(
@@ -139,18 +157,15 @@ export default function CriarAvaliacaoWizard() {
   const totalParticipantes = turmasSelecionadas.reduce((acc, t) => acc + t.alunos.length, 0);
 
   function toggleEscola(id: string) {
-    setEscolaIds((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-      const escolhida = escolas.find((e) => e.id === id);
-      if (escolhida) {
-        setTurmaIds((prevT) =>
-          next.includes(id)
-            ? Array.from(new Set([...prevT, ...escolhida.turmas.map((t) => t.id)]))
-            : prevT.filter((x) => !escolhida.turmas.some((t) => t.id === x))
-        );
-      }
-      return next;
-    });
+    const escola = escolas.find((e) => e.id === id);
+    if (!escola || escola.turmas.length === 0) return;
+    const turmasDaEscola = escola.turmas.map((t) => t.id);
+    const todasSelecionadas = turmasDaEscola.every((t) => turmaIds.includes(t));
+    setTurmaIds((prev) =>
+      todasSelecionadas
+        ? prev.filter((x) => !turmasDaEscola.includes(x))
+        : Array.from(new Set([...prev, ...turmasDaEscola]))
+    );
   }
 
   function toggleTurma(id: string) {
@@ -224,16 +239,14 @@ export default function CriarAvaliacaoWizard() {
       if (pdfFile.size > 4_000_000) return "O arquivo PDF deve ter no máximo 4 MB.";
     }
     if (current === 2) return validateQuestoes();
-    if (current === 3 && escolaIds.length === 0) return "Selecione ao menos uma escola.";
-    if (current === 4 && turmaIds.length === 0) return "Selecione ao menos uma turma.";
+    if (current === 3 && turmaIds.length === 0) return "Selecione ao menos uma escola ou turma.";
     return "";
   }
 
   function canContinue(): boolean {
     if (step === 1) return titulo.trim().length >= 3 && Boolean(pdfFile);
     if (step === 2) return questoes.length > 0;
-    if (step === 3) return escolaIds.length > 0;
-    if (step === 4) return turmaIds.length > 0;
+    if (step === 3) return turmaIds.length > 0;
     return true;
   }
 
@@ -347,7 +360,7 @@ export default function CriarAvaliacaoWizard() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Criar avaliação</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Importe o PDF, cadastre o gabarito, selecione escolas e turmas, confira os participantes e publique.
+          Importe o PDF, cadastre o gabarito, selecione escolas e turmas, confirme os destinos e publique.
         </p>
       </div>
 
@@ -697,44 +710,80 @@ export default function CriarAvaliacaoWizard() {
         </section>
       )}
 
-      {/* Passo 3: Escolas */}
+      {/* Passo 3: Selecionar Escolas */}
       {step === 3 && (
         <section>
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
             <Building2 className="h-4 w-4 text-indigo-600" />
-            Selecione as escolas participantes
+            Selecione as escolas e turmas participantes
           </h2>
           {escolas.length === 0 ? (
             <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
               Nenhuma escola cadastrada. Importe as escolas pelas planilhas em &quot;Gestão de cadastros&quot;.
             </p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 lg:grid-cols-2">
               {escolas.map((e) => {
-                const selected = escolaIds.includes(e.id);
+                const turmasDaEscola = e.turmas;
+                const todasSelecionadas = turmasDaEscola.length > 0 && turmasDaEscola.every((t) => turmaIds.includes(t.id));
+                const algumasSelecionadas = turmasDaEscola.some((t) => turmaIds.includes(t.id));
+                const alunos = turmasDaEscola.reduce((acc, t) => acc + t.alunos.length, 0);
                 return (
-                  <button
+                  <div
                     key={e.id}
-                    type="button"
-                    onClick={() => toggleEscola(e.id)}
                     className={cn(
-                      "flex items-center justify-between rounded-2xl border bg-white p-4 text-left transition",
-                      selected ? "border-indigo-500 ring-2 ring-indigo-100" : "border-slate-200 hover:border-indigo-300"
+                      "rounded-2xl border bg-white shadow-sm transition",
+                      todasSelecionadas
+                        ? "border-indigo-500 ring-2 ring-indigo-100"
+                        : algumasSelecionadas
+                          ? "border-indigo-300 ring-2 ring-indigo-50"
+                          : "border-slate-200"
                     )}
                   >
-                    <div>
-                      <p className="font-semibold text-slate-800">{e.nome}</p>
-                      <p className="mt-0.5 text-xs text-slate-400">{e.turmas.length} turmas</p>
-                    </div>
-                    <span
-                      className={cn(
-                        "flex h-5 w-5 items-center justify-center rounded-full border text-white",
-                        selected ? "border-indigo-600 bg-indigo-600" : "border-slate-300"
-                      )}
+                    <button
+                      type="button"
+                      onClick={() => toggleEscola(e.id)}
+                      disabled={turmasDaEscola.length === 0}
+                      className="flex w-full items-center justify-between gap-3 p-4 text-left transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {selected && <CheckCircle2 className="h-4 w-4" />}
-                    </span>
-                  </button>
+                      <div className="flex items-center gap-3">
+                        <TreeCheckbox checked={todasSelecionadas} partial={algumasSelecionadas && !todasSelecionadas} />
+                        <div>
+                          <p className="font-semibold text-slate-800">{e.nome}</p>
+                          <p className="mt-0.5 text-xs text-slate-400">{turmasDaEscola.length} turmas · {alunos} alunos</p>
+                        </div>
+                      </div>
+                    </button>
+                    <div className="border-t border-slate-100 px-4 py-2">
+                      {turmasDaEscola.length === 0 ? (
+                        <p className="py-2 text-xs text-slate-400">Nenhuma turma cadastrada.</p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {turmasDaEscola.map((t) => {
+                            const sel = turmaIds.includes(t.id);
+                            return (
+                              <li key={t.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleTurma(t.id)}
+                                  className={cn(
+                                    "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition",
+                                    sel ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"
+                                  )}
+                                >
+                                  <TreeCheckbox checked={sel} />
+                                  <span className="font-medium">{t.nome}</span>
+                                  <span className="ml-auto text-xs text-slate-400">
+                                    {t.turno ? `${t.turno} · ` : ""}{t.alunos.length} alunos
+                                  </span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -742,69 +791,21 @@ export default function CriarAvaliacaoWizard() {
         </section>
       )}
 
-      {/* Passo 4: Turmas */}
+      {/* Passo 4: Confirmar Destinos */}
       {step === 4 && (
-        <section>
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <Users className="h-4 w-4 text-indigo-600" />
-            Selecione as turmas participantes
-          </h2>
-          {turmasDisponiveis.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-              Selecione ao menos uma escola para escolher as turmas.
-            </p>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {turmasDisponiveis.map((t) => {
-                const selected = turmaIds.includes(t.id);
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => toggleTurma(t.id)}
-                    className={cn(
-                      "flex items-center justify-between rounded-2xl border bg-white p-4 text-left transition",
-                      selected ? "border-indigo-500 ring-2 ring-indigo-100" : "border-slate-200 hover:border-indigo-300"
-                    )}
-                  >
-                    <div>
-                      <p className="font-semibold text-slate-800">{t.nome}</p>
-                      <p className="mt-0.5 text-xs text-slate-400">
-                        {t.escolaNome}
-                        {t.turno ? ` · ${t.turno}` : ""} · {t.alunos.length} alunos
-                      </p>
-                    </div>
-                    <span
-                      className={cn(
-                        "flex h-5 w-5 items-center justify-center rounded-full border text-white",
-                        selected ? "border-indigo-600 bg-indigo-600" : "border-slate-300"
-                      )}
-                    >
-                      {selected && <CheckCircle2 className="h-4 w-4" />}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Passo 5: Conferir participantes */}
-      {step === 5 && (
         <section>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
               <UserCheck className="h-4 w-4 text-indigo-600" />
-              Conferir participantes
+              Confirmar destinos
             </h2>
             <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
-              {turmasSelecionadas.length} turmas · {totalParticipantes} alunos
+              {escolasSelecionadas.length} escolas · {turmasSelecionadas.length} turmas · {totalParticipantes} alunos
             </span>
           </div>
           {turmasSelecionadas.length === 0 ? (
             <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-              Selecione ao menos uma turma para conferir os participantes.
+              Selecione ao menos uma escola ou turma para publicar a prova.
             </p>
           ) : (
             <div className="space-y-6">
@@ -822,33 +823,14 @@ export default function CriarAvaliacaoWizard() {
                         {turmasDaEscola.reduce((acc, t) => acc + t.alunos.length, 0)} alunos
                       </span>
                     </div>
-                    <div className="mt-3 space-y-3">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       {turmasDaEscola.map((t) => (
-                        <div key={t.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-semibold text-slate-700">
-                              {t.nome}
-                              <span className="ml-2 text-xs font-normal text-slate-400">
-                                {t.turno ? `${t.turno} · ` : ""}{t.alunos.length} alunos
-                              </span>
-                            </p>
-                          </div>
-                          <div className="mt-2 max-h-44 overflow-y-auto rounded-lg bg-white p-2">
-                            {t.alunos.length === 0 ? (
-                              <p className="text-xs text-slate-400">Nenhum aluno matriculado nesta turma.</p>
-                            ) : (
-                              <ul className="divide-y divide-slate-100 text-xs">
-                                {t.alunos.map((aluno) => (
-                                  <li key={aluno.id} className="flex items-center justify-between py-1 px-1">
-                                    <span className="font-medium text-slate-700">{aluno.nome}</span>
-                                    <span className="text-slate-400">
-                                      {aluno.numeroChamada ? `Chamada ${aluno.numeroChamada}` : ""}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
+                        <div key={t.id} className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                          <span className="text-xs font-semibold text-emerald-700">{t.nome}</span>
+                          <span className="text-[10px] font-medium text-emerald-500">
+                            {t.alunos.length} alunos
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -857,11 +839,15 @@ export default function CriarAvaliacaoWizard() {
               })}
             </div>
           )}
+          <p className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+            A mesma prova (PDF, questões e gabarito) ficará disponível para todas as escolas e turmas selecionadas
+            acima. Confira os destinos antes de publicar.
+          </p>
         </section>
       )}
 
-      {/* Passo 6: Publicar */}
-      {step === 6 && (
+      {/* Passo 5: Publicar */}
+      {step === 5 && (
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700">
             <Rocket className="h-4 w-4 text-indigo-600" />
@@ -898,7 +884,7 @@ export default function CriarAvaliacaoWizard() {
             </div>
             <div className="flex justify-between gap-4 py-2">
               <dt className="text-slate-500">Escolas</dt>
-              <dd className="text-right font-semibold text-slate-800">{escolaIds.length}</dd>
+              <dd className="text-right font-semibold text-slate-800">{escolasSelecionadas.length}</dd>
             </div>
             <div className="flex justify-between gap-4 py-2">
               <dt className="text-slate-500">Turmas</dt>

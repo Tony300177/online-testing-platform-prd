@@ -140,6 +140,9 @@ Arquivos **`.xlsx`**, **`.xls`** e **`.csv`**, até **5.000 linhas** (turmas) e 
 | `MATRICULA` | `MATRÍCULA`, `Nº MATRÍCULA` | opcional |
 | `CPF` | `CPF`, `CPF DO ALUNO` | opcional (chave de dedupe) |
 | `DATA_NASCIMENTO` | `DATA DE NASCIMENTO`, `NASCIMENTO`, `DT NASCIMENTO`, `DATA` | opcional |
+| `SEXO` | `SEXO`, `GÊNERO`, `GÊNERO DO ALUNO` | opcional (normaliza M/F → Masculino/Feminino) |
+| `ETNIA` | `ETNIA`, `COR`, `COR/RAÇA`, `RAÇA`, `COR OU RAÇA` | opcional (normaliza para a classificação IBGE) |
+| `BAIRRO` | `BAIRRO`, `BAIRRO DE RESIDÊNCIA`, `RESIDÊNCIA` | opcional |
 | `TURMA` | `TURMA`, `NOME DA TURMA`, `CLASSE`, `SALA` | sim (salvo se a turma for definida no wizard) |
 | `TURNO` | `TURNO`, `PERÍODO` | opcional (conferido contra a turma) |
 | `ANO` | `ANO`, `SÉRIE`, `ANO/SÉRIE`, `TURMA_ANO` | opcional (conferido contra a turma) |
@@ -217,7 +220,7 @@ Tudo roda em **transação**:
 4. **Alunos** — **dedupe por CPF, fallback por nome normalizado**; insere com senha padrão `123456` (bcrypt) **somente se novo**; nunca sobrescreve senha existente.
 5. **Matrículas** — `ON CONFLICT (aluno, turma, ano)` → `DO NOTHING`.
 
-> **Gap atual (ver §9):** os campos **`etnia`, `sexo` (gênero) e `bairro`** já existem no schema e são exibidos no dashboard, mas as planilhas de importação de alunos (B) **ainda não os leem** — ficaram de fora do parse atual.
+> **Demográficos:** as colunas `SEXO`, `ETNIA/COR` e `BAIRRO` da planilha B são lidas e normalizadas — gênero para `Masculino`/`Feminino` (aceita `M`/`F`) e etnia para a lista IBGE (`Branca`, `Preta`, `Parda`, `Amarela`, `Indígena`). Valores não reconhecidos viram **aviso** (linha importada) — sem bloqueio.
 
 ---
 

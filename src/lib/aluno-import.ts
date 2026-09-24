@@ -25,13 +25,16 @@ const HEADER_ALIASES: Record<string, string[]> = {
   MATRICULA: ["MATRICULA", "MATRÍCULA", "Nº MATRICULA", "Nº MATRÍCULA", "NUMERO MATRICULA", "NUMERO DA MATRICULA"],
   CPF: ["CPF", "CPF DO ALUNO"],
   DATA_NASCIMENTO: ["DATA DE NASCIMENTO", "DATA NASCIMENTO", "NASCIMENTO", "DT NASCIMENTO", "DATA"],
+  SEXO: ["SEXO", "GENERO", "GÊNERO", "SEXO/GÊNERO", "SEXO E GÊNERO", "GÊNERO DO ALUNO"],
+  ETNIA: ["ETNIA", "COR", "RACA", "RAÇA", "COR RACA", "COR/RAÇA", "COR/RACA", "RACA/COR", "RAÇA/COR", "COR OU RAÇA", "COR ETNIA", "COR/ETNIA"],
+  BAIRRO: ["BAIRRO", "BAIRRO DE RESIDENCIA", "BAIRRO DE RESIDÊNCIA", "BAIRRO DO ALUNO", "RESIDENCIA", "RESIDÊNCIA", "BAIRRO DO ESTUDANTE"],
   TURMA: ["TURMA", "NOME DA TURMA", "CLASSE", "SALA"],
   TURNO: ["TURNO", "PERIODO", "PERÍODO", "TURNO AULA"],
   ANO: ["ANO", "SERIE", "SÉRIE", "ANO/SÉRIE", "ANO E SÉRIE", "TURMA_ANO", "ANO SERIE", "SERIE ANO"],
   PROFESSOR: ["PROFESSOR", "NOME DO PROFESSOR", "DOCENTE"],
 };
 
-export const ALUNO_FIELDS = ["NUMERO_CHAMADA", "NOME", "INEP", "MATRICULA", "CPF", "DATA_NASCIMENTO", "TURMA", "TURNO", "ANO", "PROFESSOR"] as const;
+export const ALUNO_FIELDS = ["NUMERO_CHAMADA", "NOME", "INEP", "MATRICULA", "CPF", "DATA_NASCIMENTO", "SEXO", "ETNIA", "BAIRRO", "TURMA", "TURNO", "ANO", "PROFESSOR"] as const;
 export type AlunoImportField = (typeof ALUNO_FIELDS)[number];
 
 export function normalizeHeader(value: string): string {
@@ -129,6 +132,40 @@ function cleanText(value: string | number | null | undefined): string {
   return String(value).trim();
 }
 
+/** Normaliza gênero/sexo para "Masculino" | "Feminino" (aceita M/F e variações). */
+export function normalizeGenero(value: string): string | null {
+  const v = value
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+  if (v === "M" || v === "MASC" || v === "MASCULINO" || v === "MASCULIN") return "Masculino";
+  if (v === "F" || v === "FEM" || v === "FEMININO") return "Feminino";
+  return null;
+}
+
+/** Normaliza cor/raça para a classificação IBGE (Branca, Preta, Parda, Amarela, Indígena). */
+export function normalizeEtnia(value: string): string | null {
+  const v = value
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+  const ETNIAS_IBGE: [string[], string][] = [
+    [["BRANCA", "BRANCO"], "Branca"],
+    [["PRETA", "PRETO", "NEGRA", "NEGRO"], "Preta"],
+    [["PARDA", "PARDO"], "Parda"],
+    [["AMARELA", "AMARELO"], "Amarela"],
+    [["INDIGENA", "INDIGENO", "INDIGENA/BRASILEIRA"], "Indígena"],
+  ];
+  for (const [aliases, label] of ETNIAS_IBGE) {
+    if (aliases.includes(v)) return label;
+  }
+  return null;
+}
+
 /** Converte "yyyy-mm-dd" (ou Date) para Date usado nos inserts do drizzle. */
 function toDate(value: string | Date | null | undefined): Date | null {
   if (!value) return null;
@@ -152,6 +189,9 @@ export type ParsedAlunoRow = {
   matricula: string | null;
   dataNascimento: string | null;
   numeroChamada: number | null;
+  sexo: string | null;
+  etnia: string | null;
+  bairro: string | null;
   turma: string;
   turno: string | null;
   ano: string | null;
@@ -235,6 +275,16 @@ export function parseAlunoRows(rows: ImportAlunoLine[], options: AlunoImportOpti
     const ano = get("ANO", row).toUpperCase() || null;
     const professor = get("PROFESSOR", row).toUpperCase() || null;
 
+    const sexoRaw = get("SEXO", row);
+    const sexo = sexoRaw ? normalizeGenero(sexoRaw) : null;
+    if (sexoRaw && !sexo) avisos.push(`SEXO "${sexoRaw}" não reconhecido — use Masculino ou Feminino`);
+
+    const etniaRaw = get("ETNIA", row);
+    const etnia = etniaRaw ? normalizeEtnia(etniaRaw) : null;
+    if (etniaRaw && !etnia) avisos.push(`ETNIA/COR "${etniaRaw}" não reconhecida — use Branca, Preta, Parda, Amarela ou Indígena`);
+
+    const bairro = cleanText(get("BAIRRO", row)) || null;
+
     const numeroChamada =
       numeroChamadaRaw === "" || !/^\d+$/.test(numeroChamadaRaw)
         ? null
@@ -257,13 +307,16 @@ export function parseAlunoRows(rows: ImportAlunoLine[], options: AlunoImportOpti
       matricula,
       dataNascimento,
       numeroChamada,
+      sexo,
+      etnia,
+      bairro,
       turma,
       turno: turnoRaw ? turnoRaw.toUpperCase() : null,
       ano,
       professor,
       anoLetivo,
       motivos,
-      avisos: [],
+      avisos,
     };
   });
 }
@@ -357,7 +410,7 @@ export async function validateAlunoImport(rows: ImportAlunoLine[], options: Alun
 
   for (const item of items) {
     const motivos = [...item.motivos];
-    const avisos: string[] = [];
+    const avisos: string[] = item.avisos ? [...item.avisos] : [];
 
     // Bloqueio de escola incorreta: turma precisa existir na escola selecionada.
     let turmaRow: Turma | null = null;
@@ -417,6 +470,9 @@ export async function commitAlunoImport(rows: ImportAlunoLine[], options: AlunoI
 
   const resumoMap = new Map<string, AlunoResumoTurma>();
 
+  // Senha padrão é a mesma para todos: calcula o hash uma única vez.
+  const senhaHash = bcrypt.hashSync(STUDENT_DEFAULT_PASSWORD, 10);
+
   // Linhas ignoradas no commit (erros de parse ou turma fora da escola).
   let continuaIgnorados = 0;
 
@@ -425,7 +481,7 @@ export async function commitAlunoImport(rows: ImportAlunoLine[], options: AlunoI
   await db.transaction(async (tx) => {
     for (const item of items) {
       const motivos = [...item.motivos];
-      const avisos: string[] = [];
+      const avisos: string[] = item.avisos ? [...item.avisos] : [];
 
       // ---- Turma (bloqueio de escola incorreta) ----
       let turmaRow: Turma | null = null;
@@ -453,7 +509,6 @@ export async function commitAlunoImport(rows: ImportAlunoLine[], options: AlunoI
       let aluno = item.cpf ? findAlunoPorCPF(snap.alunos, item.cpf) : null;
       if (!aluno) aluno = findAlunoPorNome(snap.alunos, item.nome);
 
-      const senhaHash = bcrypt.hashSync(STUDENT_DEFAULT_PASSWORD, 10);
       let alunoId: string;
 
       if (aluno) {
@@ -465,6 +520,9 @@ export async function commitAlunoImport(rows: ImportAlunoLine[], options: AlunoI
         if (dataNova && (!dataAtual || dataAtual.getTime() !== dataNova.getTime())) {
           patch.dataNascimento = dataNova;
         }
+        if (item.sexo && aluno.sexo !== item.sexo) patch.sexo = item.sexo;
+        if (item.etnia && aluno.etnia !== item.etnia) patch.etnia = item.etnia;
+        if (item.bairro && aluno.bairro !== item.bairro) patch.bairro = item.bairro;
         if (item.numeroChamada !== null && aluno.numeroChamada === null) patch.numeroChamada = item.numeroChamada;
         if (!aluno.senhaHash) patch.senhaHash = senhaHash;
         if (Object.keys(patch).length > 0) {
@@ -481,6 +539,9 @@ export async function commitAlunoImport(rows: ImportAlunoLine[], options: AlunoI
             matricula: item.inep ?? undefined,
             dataNascimento: toDate(item.dataNascimento) ?? undefined,
             numeroChamada: item.numeroChamada ?? undefined,
+            sexo: item.sexo ?? undefined,
+            etnia: item.etnia ?? undefined,
+            bairro: item.bairro ?? undefined,
             senhaHash,
           })
           .returning();

@@ -50,7 +50,6 @@ type AlunoReport = {
 type Step =
   | "escola"
   | "arquivo"
-  | "colunas"
   | "padroes"
   | "validar"
   | "importando"
@@ -59,19 +58,10 @@ type Step =
 const STEPS: { id: Step; label: string }[] = [
   { id: "escola", label: "1. Escola" },
   { id: "arquivo", label: "2. Arquivo" },
-  { id: "colunas", label: "3. Colunas" },
-  { id: "padroes", label: "4. Padrões" },
-  { id: "validar", label: "5. Validar" },
-  { id: "importando", label: "6. Importação" },
-  { id: "resultado", label: "7. Resultado" },
-];
-/* Campos da planilha que podem ser mapeados (nesta ordem no passo 3). */
-const CAMPOS: { id: string; etiqueta: string; opcional?: boolean }[] = [
-  { id: "NOME", etiqueta: "Nome do aluno" },
-  { id: "TURMA", etiqueta: "Nome da turma" },
-  { id: "ANO", etiqueta: "Ano/Série" },
-  { id: "TURNO", etiqueta: "Turno" },
-  { id: "PROFESSOR", etiqueta: "Professor", opcional: true },
+  { id: "padroes", label: "3. Padrões" },
+  { id: "validar", label: "4. Validar" },
+  { id: "importando", label: "5. Importação" },
+  { id: "resultado", label: "6. Resultado" },
 ];
 
 /* Alias aceitos para auto-detecção (mesma lógica da lib). */
@@ -79,8 +69,11 @@ const ALIASES_CAMPO: Record<string, string[]> = {
   NOME: ["NOME", "NOME DO ALUNO", "ALUNO", "NOME DO ESTUDANTE", "ESTUDANTE"],
   TURMA: ["TURMA", "NOME DA TURMA", "TURMA (NOME)", "CLASSE", "SALA", "GRUPO"],
   ANO: ["ANO", "SERIE", "SÉRIE", "ANO/SERIE", "ANO/SÉRIE", "ANO E SERIE", "ANO E SÉRIE", "TURMA_ANO"],
-  TURNO: ["TURNO", "PERIODO", "PERÍODO", "PERIODO AULA", "HORARIO", "HORÁRIO"],
+TURNO: ["TURNO", "PERIODO", "PERÍODO", "PERIODO AULA", "HORARIO", "HORÁRIO"],
   PROFESSOR: ["PROFESSOR", "PROFESSOR (NOME)", "NOME DO PROFESSOR", "DOCENTE"],
+  SEXO: ["SEXO", "GENERO", "GÊNERO", "SEXO/GÊNERO", "GÊNERO DO ALUNO"],
+  ETNIA: ["ETNIA", "COR", "COR/RACA", "COR/RÇA", "RACA", "RAÇA", "COR OU RAÇA", "RACA/COR", "COR/RAÇA"],
+  BAIRRO: ["BAIRRO", "BAIRRO DE RESIDENCIA", "BAIRRO DE RESIDÊNCIA", "BAIRRO DO ALUNO", "RESIDENCIA"],
 };
 
 function normCompare(value: string): string {
@@ -105,13 +98,17 @@ function detectarColunas(headers: string[]): Record<string, string> {
  * Fluxo de importação de alunos (escola → arquivo → colunas → padrões → validar → confirmar).
  */
 export default function ImportUnificadoPanel() {
-  const [step, setStep] = useState<
-    "escola" | "arquivo" | "colunas" | "padroes" | "validar" | "importando" | "resultado"
+const [step, setStep] = useState<
+    "escola" | "arquivo" | "padroes" | "validar" | "importando" | "resultado"
   >("escola");
 
-  // Escola
+// Escola
   const [escolasData, setEscolasData] = useState<
-    { id: string; nome: string; turmas: { id: string; nome: string }[] }[]
+    {
+      id: string;
+      nome: string;
+      turmas: { id: string; nome: string; alunos?: { id: string; nome: string; numeroChamada: number | null }[] }[];
+    }[]
   >([]);
   const [escolaCodigo, setEscolaCodigo] = useState<number | null>(null);
   const [buscaEscola, setBuscaEscola] = useState("");
@@ -142,12 +139,27 @@ export default function ImportUnificadoPanel() {
   }, []);
 
   const fixedEscola = ESCOLAS_MUNICIPAIS.find((ec) => ec.numero === escolaCodigo) ?? null;
-  const selectedEscola = useMemo(() => {
+const selectedEscola = useMemo(() => {
     if (!fixedEscola) return null;
     return (
       escolasData.find((e) => normCompare(e.nome) === normCompare(fixedEscola.nome)) ?? null
     );
   }, [fixedEscola, escolasData]);
+
+  /* Quantidade de alunos já cadastrados na escola selecionada. */
+  const totalAlunosEscola = useMemo(
+    () => selectedEscola?.turmas?.reduce((acc, t) => acc + (t.alunos?.length ?? 0), 0) ?? 0,
+    [selectedEscola]
+  );
+
+  /* Nomes já cadastrados na escola (para a pré-visualização Novos vs Já cadastrados). */
+  const alunosExistentesEscola = useMemo(() => {
+    const s = new Set<string>();
+    selectedEscola?.turmas?.forEach((t) =>
+      t.alunos?.forEach((a) => s.add(normCompare(a.nome)))
+    );
+    return s;
+  }, [selectedEscola]);
 
   /* ---------- Filtro de escolas por busca ---------- */
   const escolasFiltradas = useMemo(() => {
@@ -266,15 +278,33 @@ export default function ImportUnificadoPanel() {
   }
 
   function stepIndex(): number {
-    const order: Step[] = ["escola", "arquivo", "colunas", "padroes", "validar", "importando", "resultado"];
+    const order: Step[] = ["escola", "arquivo", "padroes", "validar", "importando", "resultado"];
     return Math.max(0, order.indexOf(step));
   }
 
-  const importados = report?.escrita?.alunosCriados ?? 0;
+const importados = report?.escrita?.alunosCriados ?? 0;
   const comErros = report?.escrita?.ignorados ?? report?.erros ?? 0;
-  const duplicados = report?.escrita?.jaCadastrados ?? 0;
+  const atualizados = report?.escrita?.alunosAtualizados ?? 0;
 
   const headers = file?.rows.length ? Object.keys(file.rows[0]) : [];
+
+  /* Classificação da pré-visualização: novato (verde), já cadastrado (amarelo) ou erro (vermelho). */
+  const situacaoItens = useMemo(() => {
+    if (!report) return [];
+    return report.itens.map((i) => ({
+      ...i,
+      situacao:
+        i.status === "erro"
+          ? "erro"
+          : alunosExistentesEscola.has(normCompare(i.nome))
+            ? "cadastrado"
+            : "novo",
+    }));
+  }, [report, alunosExistentesEscola]);
+
+  const novosCount = situacaoItens.filter((i) => i.situacao === "novo").length;
+  const jaCadastradosCount = situacaoItens.filter((i) => i.situacao === "cadastrado").length;
+  const errosCount = report?.erros ?? 0;
 
   /* ================================================================ */
   return (
@@ -412,15 +442,15 @@ export default function ImportUnificadoPanel() {
             <p className="text-sm font-semibold text-slate-700">
               {file ? file.name : "Arraste a planilha ou clique para enviar"}
             </p>
-            <p className="text-xs text-slate-400">
+<p className="text-xs text-slate-400">
               {file
                 ? `${file.rows.length} aluno(s) encontrados no arquivo`
-                : ".xlsx · primeira linha = cabeçalho"}
+                : ".xlsx · .xls · .csv — primeira linha = cabeçalho"}
             </p>
             <input
               id="arquivo-unificado"
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.csv"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
@@ -439,74 +469,8 @@ export default function ImportUnificadoPanel() {
             </button>
             <button
               type="button"
-              onClick={() => setStep("colunas")}
-              disabled={!file}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Continuar <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ============ PASSO 3: Identificar colunas ============ */}
-      {step === "colunas" && file && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="flex items-center gap-2 font-bold text-slate-900">
-            <FileSpreadsheet className="h-5 w-5 text-indigo-600" /> Identificar colunas
-          </h2>
-          <p className="mt-1 text-xs text-slate-400">
-            Confirme a correspondência entre as colunas da planilha e os campos do sistema. Professor é opcional.
-          </p>
-
-          <div className="mt-4 space-y-4">
-            {CAMPOS.map((campo) => {
-              const value = colunas[campo.id] ?? "";
-              return (
-                <div key={campo.id} className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:items-center">
-                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                    {campo.etiqueta}
-                    {campo.opcional && <span className="text-xs font-normal text-slate-400">(opcional)</span>}
-                  </label>
-                  <select
-                    value={value}
-                    onChange={(e) =>
-                      setColunas((prev) => {
-                        const next = { ...prev };
-                        if (e.target.value) next[campo.id] = e.target.value;
-                        else delete next[campo.id];
-                        return next;
-                      })
-                    }
-                    className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                  >
-                    <option value="">— Não usar / não encontrado —</option>
-                    {headers.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              );
-            })}
-            {colunas["NOME"] && !headers.includes(colunas["NOME"]) && (
-              <p className="text-xs text-rose-500">A coluna de Nome aponta para um cabeçalho que não está no arquivo.</p>
-            )}
-          </div>
-
-          <div className="mt-4 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setStep("arquivo")}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-            >
-              <ArrowLeft className="h-4 w-4" /> Voltar
-            </button>
-            <button
-              type="button"
               onClick={() => setStep("padroes")}
-              disabled={!colunas["NOME"] || !colunas["TURMA"]}
+              disabled={!file}
               className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Continuar <ArrowRight className="h-4 w-4" />
@@ -524,12 +488,15 @@ export default function ImportUnificadoPanel() {
           <p className="mt-1 text-xs text-slate-400">Confira os padrões que serão aplicados à importação.</p>
 
           <dl className="mt-4 space-y-3">
-            <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+<div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
               <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Escola</dt>
               <dd className="max-w-[70%] text-right">
                 <span className="block text-sm font-bold text-slate-900">{fixedEscola.nome}</span>
                 <span className="block text-xs text-slate-500">
                   Código {String(fixedEscola.numero).padStart(2, "0")} · {escolaTipo(fixedEscola.numero)}
+                </span>
+                <span className="mt-1 block text-xs font-semibold text-indigo-700">
+                  {totalAlunosEscola} aluno(s) já cadastrado(s)
                 </span>
               </dd>
             </div>
@@ -543,8 +510,8 @@ export default function ImportUnificadoPanel() {
             </div>
             <div className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
               <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Padrões</dt>
-              <dd className="max-w-[70%] text-right text-sm font-semibold text-slate-900">
-                Ano/Série e Turno vêm da planilha · Professor opcional
+<dd className="max-w-[70%] text-right text-sm font-semibold text-slate-900">
+                Ano/Série e Turno vêm da planilha · Professor, Gênero, Etnia e Bairro opcionais
               </dd>
             </div>
           </dl>
@@ -552,7 +519,7 @@ export default function ImportUnificadoPanel() {
           <div className="mt-4 flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => setStep("colunas")}
+              onClick={() => setStep("padroes")}
               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
             >
               <ArrowLeft className="h-4 w-4" /> Voltar
@@ -591,18 +558,22 @@ export default function ImportUnificadoPanel() {
             )}
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-3">
+<div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <p className="text-2xl font-extrabold text-slate-900">{report.total}</p>
+              <p className="text-xs font-semibold text-slate-500">linhas processadas</p>
+            </div>
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-              <p className="text-2xl font-extrabold text-emerald-700">{report.validas}</p>
-              <p className="text-xs font-semibold text-emerald-700">alunos válidos</p>
+              <p className="text-2xl font-extrabold text-emerald-700">{novosCount}</p>
+              <p className="text-xs font-semibold text-emerald-700">🟢 novos alunos</p>
             </div>
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-2xl font-extrabold text-amber-600">{report.avisos}</p>
-              <p className="text-xs font-semibold text-amber-600">avisos</p>
+              <p className="text-2xl font-extrabold text-amber-600">{jaCadastradosCount}</p>
+              <p className="text-xs font-semibold text-amber-600">🟡 já cadastrados</p>
             </div>
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
-              <p className="text-2xl font-extrabold text-rose-600">{report.erros}</p>
-              <p className="text-xs font-semibold text-rose-600">erros</p>
+              <p className="text-2xl font-extrabold text-rose-600">{errosCount}</p>
+              <p className="text-xs font-semibold text-rose-600">🔴 dados com erro</p>
             </div>
           </div>
 
@@ -618,7 +589,7 @@ export default function ImportUnificadoPanel() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {report.itens.map((i) => (
+                  {situacaoItens.map((i) => (
                     <tr key={i.linha}>
                       <td className="px-3 py-2 align-top text-xs font-mono text-slate-400">{i.linha}</td>
                       <td className="px-3 py-2 align-top font-semibold text-slate-900">{i.nome}</td>
@@ -626,19 +597,19 @@ export default function ImportUnificadoPanel() {
                         {i.turma} {i.turno ? `· ${i.turno}` : ""}
                       </td>
                       <td className="px-3 py-2 align-top text-xs">
-                        {i.status === "ok" && (
-                          <span className="inline-flex items-center gap-1 font-semibold text-emerald-600">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> OK
-                          </span>
-                        )}
-                        {i.status === "aviso" && (
-                          <span className="inline-flex items-center gap-1 font-semibold text-amber-600">
-                            <AlertTriangle className="h-3.5 w-3.5" /> Aviso
-                          </span>
-                        )}
-                        {i.status === "erro" && (
+                        {i.situacao === "erro" && (
                           <span className="inline-flex items-center gap-1 font-semibold text-rose-600">
-                            <XCircle className="h-3.5 w-3.5" /> Erro
+                            <XCircle className="h-3.5 w-3.5" /> Dados com erro
+                          </span>
+                        )}
+                        {i.situacao === "cadastrado" && (
+                          <span className="inline-flex items-center gap-1 font-semibold text-amber-600">
+                            <AlertTriangle className="h-3.5 w-3.5" /> Já cadastrado
+                          </span>
+                        )}
+                        {i.situacao === "novo" && (
+                          <span className="inline-flex items-center gap-1 font-semibold text-emerald-600">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Novo aluno
                           </span>
                         )}
                         {i.motivos.length > 0 && (
@@ -697,18 +668,22 @@ export default function ImportUnificadoPanel() {
               {fixedEscola?.nome} · {file?.name}
             </p>
 
-            <div className="mx-auto mt-6 grid max-w-lg grid-cols-3 gap-3">
+<div className="mx-auto mt-6 grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <p className="text-2xl font-extrabold text-slate-900">{report.total}</p>
+                <p className="text-xs font-semibold text-slate-500">total processado</p>
+              </div>
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                 <p className="text-2xl font-extrabold text-emerald-700">{importados}</p>
-                <p className="text-xs font-semibold text-emerald-700">alunos importados</p>
+                <p className="text-xs font-semibold text-emerald-700">importados</p>
               </div>
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="text-2xl font-extrabold text-amber-600">{comErros}</p>
-                <p className="text-xs font-semibold text-amber-600">alunos com erros</p>
+                <p className="text-2xl font-extrabold text-amber-600">{atualizados}</p>
+                <p className="text-xs font-semibold text-amber-600">atualizados</p>
               </div>
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="text-2xl font-extrabold text-amber-600">{duplicados}</p>
-                <p className="text-xs font-semibold text-amber-600">registros duplicados</p>
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+                <p className="text-2xl font-extrabold text-rose-600">{comErros}</p>
+                <p className="text-xs font-semibold text-rose-600">erros</p>
               </div>
             </div>
 

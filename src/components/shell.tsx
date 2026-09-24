@@ -46,7 +46,7 @@ const NAV: NavItem[] = [
     icon: ClipboardList,
     children: [
       { href: "/professor", label: "Provas", icon: ClipboardList },
-      { href: "/professor/nova", label: "Nova prova", icon: FilePlus2 },
+      { href: "/admin/avaliacoes/nova", label: "Nova prova", icon: FilePlus2 },
       { href: "/admin/aplicacoes", label: "Aplicações", icon: CalendarClock },
       { href: "/admin/aplicacoes/nova", label: "Nova aplicação", icon: CalendarPlus },
       { href: "/admin/respostas", label: "Respostas", icon: ListChecks },
@@ -58,7 +58,6 @@ const NAV: NavItem[] = [
     children: [
       { href: "/professor/cadastro", label: "Cadastro", icon: Building2 },
       { href: "/admin/importar", label: "Importação de planilha", icon: UploadCloud },
-      { href: "/admin/avaliacoes/nova", label: "Criar avaliação", icon: FilePlus2 },
     ] 
   },
   { 

@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/db";
 import { respostasAlunos, questoes, provas, escolas, turmas, alunos, professores } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { Target, Download, School, Users, UserCheck, Settings, BarChart3, Filter } from "lucide-react";
+import { Target, Download, School, Users, UserCheck, Settings, BarChart3, Filter, ListChecks, Plus } from "lucide-react";
 import Link from "next/link";
 import FiltrosHabilidades from "./FiltrosHabilidades";
 
@@ -148,7 +148,15 @@ export default async function AdminHabilidadesPage({
       </div>
 
       {/* Navegação dos Dashboards */}
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Link href="/admin/habilidades/consultar" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-indigo-300 hover:bg-indigo-50/50 transition">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600"><ListChecks className="h-5 w-5" /></div>
+          <div><p className="text-sm font-bold text-slate-800">Consultar habilidades</p><p className="text-[11px] text-slate-500">Catálogo BNCC: etapa, ano, componente</p></div>
+        </Link>
+        <Link href="/admin/habilidades/cadastrar" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-indigo-300 hover:bg-indigo-50/50 transition">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600"><Plus className="h-5 w-5" /></div>
+          <div><p className="text-sm font-bold text-slate-800">Cadastrar habilidade</p><p className="text-[11px] text-slate-500">Incluir nova habilidade no catálogo</p></div>
+        </Link>
         <Link href="/admin/habilidades/analise" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-indigo-300 hover:bg-indigo-50/50 transition">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600"><BarChart3 className="h-5 w-5" /></div>
           <div><p className="text-sm font-bold text-slate-800">Análise por Habilidade</p><p className="text-[11px] text-slate-500">Oportunidades, gráficos e alunos</p></div>

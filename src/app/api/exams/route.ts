@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { alternativas, provas, questoes } from "@/db/schema";
 import { getSessionUser } from "@/lib/auth";
-import { parseProvaRequest, resolveTurmaId, validateDeadlineForPublish } from "@/lib/exam-validation";
+import {
+  parseProvaRequest,
+  resolveTurmaId,
+  validateDeadlineForPublish,
+  validateHabilidadesInformadas,
+  validateHabilidadesParaPublicar,
+} from "@/lib/exam-validation";
 import { generateSlug } from "@/lib/utils";
 
 /** Cria uma nova prova (rascunho ou publicada). */
@@ -17,7 +23,11 @@ export async function POST(req: Request) {
   if (publish) {
     const deadlineError = validateDeadlineForPublish(value.dataFim);
     if (deadlineError) return NextResponse.json({ error: deadlineError }, { status: 400 });
+    const habError = validateHabilidadesParaPublicar(value.questoes);
+    if (habError) return NextResponse.json({ error: habError }, { status: 400 });
   }
+  const habCatalogoError = await validateHabilidadesInformadas(value.questoes);
+  if (habCatalogoError) return NextResponse.json({ error: habCatalogoError }, { status: 400 });
 
   const provaId = await db.transaction(async (tx) => {
     const turmaId = await resolveTurmaId(value.escolaId, value.turma);

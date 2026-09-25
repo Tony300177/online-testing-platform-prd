@@ -2,6 +2,8 @@ import { and, eq } from "drizzle-orm";
 import type { Prova } from "@/db/schema";
 import { db } from "@/db";
 import { turmas } from "@/db/schema";
+import { codigosForaDoCatalogo, listarQuestoesSemHabilidade } from "@/lib/habilidades-queries";
+import { normalizarCodigo } from "@/lib/habilidades-catalogo";
 
 export type AlternativaInput = { letra: string; texto: string; correta: boolean };
 
@@ -75,7 +77,14 @@ export function parseProvaPayload(body: unknown): { ok: true; value: ProvaInput 
       const tipo = "multiple";
       const valor = asNumber(item.valor, 1);
       const habilidade = Array.isArray(item.habilidade)
-        ? (item.habilidade as unknown[]).filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+        ? [
+            ...new Set(
+              (item.habilidade as unknown[])
+                .filter((v): v is string => typeof v === "string")
+                .map((v) => normalizarCodigo(v))
+                .filter((v) => v.length > 0)
+            ),
+          ]
         : null;
 
       const rawAlts = Array.isArray(item.alternativas) ? item.alternativas : [];
@@ -121,6 +130,49 @@ export function validateDeadlineForPublish(dataFim: Date | null): string | null 
     return "A data final precisa estar no futuro para publicar a prova.";
   }
   return null;
+}
+
+/**
+ * Garante que os códigos informados existam no catálogo de habilidades.
+ * Se o catálogo ainda não foi migrado, não bloqueia a prova (fail-open).
+ */
+export async function validateHabilidadesInformadas(questoes: QuestaoInput[]): Promise<string | null> {
+  const codigos = questoes.flatMap((q) => q.habilidade ?? []);
+  if (codigos.length === 0) return null;
+  try {
+    const inexistentes = await codigosForaDoCatalogo(codigos);
+    if (inexistentes.length > 0) {
+      return `Habilidade não cadastrada no catálogo: ${inexistentes.join(", ")}. Cadastre em Habilidades > Cadastrar.`;
+    }
+  } catch (e) {
+    console.warn("Catálogo de habilidades indisponível para validação:", e);
+  }
+  return null;
+}
+
+/** Exige ao menos uma habilidade em cada questão para publicar a prova. */
+export function validateHabilidadesParaPublicar(questoes: QuestaoInput[]): string | null {
+  const semHabilidade = questoes
+    .map((q, i) => ((q.habilidade?.length ?? 0) === 0 ? i + 1 : 0))
+    .filter((n) => n > 0);
+  if (semHabilidade.length === 0) return null;
+  const lista = semHabilidade.slice(0, 10).join(", ");
+  const extra = semHabilidade.length > 10 ? ` (+${semHabilidade.length - 10})` : "";
+  return `Vincule ao menos uma habilidade a todas as questões antes de publicar. Sem habilidade: ${lista}${extra}.`;
+}
+
+/** Mesma regra, porém sobre uma prova já salva (transição de status no banco). */
+export async function validateHabilidadesDaProvaParaPublicar(provaId: number): Promise<string | null> {
+  try {
+    const numeros = await listarQuestoesSemHabilidade(provaId);
+    if (numeros.length === 0) return null;
+    const lista = numeros.slice(0, 10).join(", ");
+    const extra = numeros.length > 10 ? ` (+${numeros.length - 10})` : "";
+    return `Vincule ao menos uma habilidade a todas as questões antes de publicar. Sem habilidade: ${lista}${extra}.`;
+  } catch (e) {
+    console.warn("Catálogo de habilidades indisponível para validação:", e);
+    return null;
+  }
 }
 
 export function isDraft(prova: Pick<Prova, "status">): boolean {

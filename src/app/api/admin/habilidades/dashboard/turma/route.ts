@@ -54,7 +54,7 @@ export async function GET(req: Request) {
         ra.aluno_nome AS "alunoNome",
         ra.aluno_turma AS "alunoTurma",
         ra.aluno_id AS "alunoId",
-        q.disciplina,
+        p.disciplina,
         unnest(q.habilidade) AS habilidade,
         ra.correta
       FROM respostas_alunos ra

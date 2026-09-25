@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { aplicacaoEscolas, aplicacaoTurmas, aplicacoes, provas, turmas } from "@/db/schema";
 import { getSessionUser } from "@/lib/auth";
 import { duplicateProvaForTurmas } from "@/lib/aplicacoes";
+import { validateHabilidadesDaProvaParaPublicar } from "@/lib/exam-validation";
 import { generateSlug } from "@/lib/utils";
 
 /** Cria uma aplicação (agendamento de uma prova do banco para várias escolas/turmas). */
@@ -27,6 +28,10 @@ export async function POST(req: Request) {
   const dataFim = body.dataFim ? new Date(body.dataFim) : null;
   if (dataInicio && Number.isNaN(dataInicio.getTime())) return NextResponse.json({ error: "Data de início inválida." }, { status: 400 });
   if (dataFim && Number.isNaN(dataFim.getTime())) return NextResponse.json({ error: "Data de término inválida." }, { status: 400 });
+
+  // Publicação: toda questão precisa ter ao menos uma habilidade vinculada
+  const habError = await validateHabilidadesDaProvaParaPublicar(provaOrigemId);
+  if (habError) return NextResponse.json({ error: habError }, { status: 400 });
 
   const aplicacaoId = await db.transaction(async (tx) => {
     const [origem] = await tx.select().from(provas).where(eq(provas.id, provaOrigemId));

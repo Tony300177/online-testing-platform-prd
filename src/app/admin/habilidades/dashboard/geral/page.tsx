@@ -49,7 +49,7 @@ export default async function AdminHabilidadesDashboardGeralPage({
   const { rows } = await db.execute(sql`
     SELECT
       ra.escola_nome AS "escolaNome",
-      q.disciplina,
+      p.disciplina,
       unnest(q.habilidade) AS habilidade,
       ra.correta
     FROM respostas_alunos ra

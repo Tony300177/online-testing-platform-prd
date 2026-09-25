@@ -204,6 +204,28 @@ export const aplicacaoTurmas = pgTable(
   (t) => [primaryKey({ columns: [t.aplicacaoId, t.turmaId] })]
 );
 
+/** Catálogo de habilidades (BNCC) — cadastro da coordenação. */
+export const habilidades = pgTable(
+  "habilidades",
+  {
+    id: serial("id").primaryKey(),
+    codigo: text("codigo").notNull().unique(), // EF05MA01 (AAAAANNDD)
+    descricao: text("descricao").notNull().default(""),
+    etapa: text("etapa").notNull(), // "fundamental_i" | "fundamental_ii" | "medio"
+    ano: integer("ano").notNull(), // 1..5 | 6..9 | 1..3
+    componente: text("componente").notNull(), // "matematica" | "lingua_portuguesa" | ...
+    categoria: text("categoria"), // "vigente" | "sensivel" | "preditora" (opcional)
+    ativo: boolean("ativo").notNull().default(true),
+    criadoPor: integer("criado_por").references(() => users.id),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).defaultNow().notNull(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("habilidades_filtros_idx").on(t.etapa, t.ano, t.componente),
+    index("habilidades_ativo_idx").on(t.ativo),
+  ]
+);
+
 /** Questões de uma prova. */
 export const questoes = pgTable(
   "questoes",
@@ -216,6 +238,11 @@ export const questoes = pgTable(
     pergunta: text("pergunta").notNull(),
     tipo: text("tipo").notNull().default("multiple"),
     valor: numeric("valor", { precision: 5, scale: 2 }).notNull().default("1"),
+    /**
+     * Códigos de habilidade vinculados à questão (ex.: ["EF05MA01"]).
+     * Validados contra a tabela `habilidades` na API e com CHECK de formato
+     * no banco (ver sql/migracao-habilidades.sql).
+     */
     habilidade: text("habilidade").array(),
     ordem: integer("ordem").notNull().default(0),
   },
@@ -297,6 +324,7 @@ export type Aplicacao = typeof aplicacoes.$inferSelect;
 export type AplicacaoTurma = typeof aplicacaoTurmas.$inferSelect;
 export type AplicacaoEscola = typeof aplicacaoEscolas.$inferSelect;
 export type Questao = typeof questoes.$inferSelect;
+export type Habilidade = typeof habilidades.$inferSelect;
 export type Alternativa = typeof alternativas.$inferSelect;
 export type RespostaAluno = typeof respostasAlunos.$inferSelect;
 export type Resultado = typeof resultados.$inferSelect;

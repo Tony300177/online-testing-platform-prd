@@ -3,7 +3,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { alternativas, provas, questoes, resultados } from "@/db/schema";
 import { getSessionUser } from "@/lib/auth";
-import { parseProvaPayload, parseProvaRequest, resolveTurmaId, validateDeadlineForPublish } from "@/lib/exam-validation";
+import {
+  parseProvaPayload,
+  parseProvaRequest,
+  resolveTurmaId,
+  validateDeadlineForPublish,
+  validateHabilidadesDaProvaParaPublicar,
+  validateHabilidadesInformadas,
+  validateHabilidadesParaPublicar,
+} from "@/lib/exam-validation";
 import { generateSlug } from "@/lib/utils";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -120,7 +128,11 @@ export async function PATCH(req: Request, { params }: Ctx) {
     if (publish) {
       const deadlineError = validateDeadlineForPublish(value.dataFim);
       if (deadlineError) return NextResponse.json({ error: deadlineError }, { status: 400 });
+      const habError = validateHabilidadesParaPublicar(value.questoes);
+      if (habError) return NextResponse.json({ error: habError }, { status: 400 });
     }
+    const habCatalogoError = await validateHabilidadesInformadas(value.questoes);
+    if (habCatalogoError) return NextResponse.json({ error: habCatalogoError }, { status: 400 });
 
     await db.transaction(async (tx) => {
       const turmaId = await resolveTurmaId(value.escolaId, value.turma);
@@ -200,6 +212,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
       if (Number(total ?? 0) === 0) {
         return NextResponse.json({ error: "Adicione pelo menos uma questão antes de publicar." }, { status: 400 });
       }
+      const habError = await validateHabilidadesDaProvaParaPublicar(id);
+      if (habError) return NextResponse.json({ error: habError }, { status: 400 });
       await db
         .update(provas)
         .set({
@@ -232,6 +246,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
     return NextResponse.json({ error: parsed.errors.join(" ") }, { status: 400 });
   }
   const { value } = parsed;
+
+  const habCatalogoError = await validateHabilidadesInformadas(value.questoes);
+  if (habCatalogoError) return NextResponse.json({ error: habCatalogoError }, { status: 400 });
 
   const pdfFields: Record<string, unknown> = {};
   if (body.removePdf === true) {

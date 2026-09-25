@@ -13,11 +13,18 @@
 .env.local
 .env*.local
 
+# ... exceto o modelo sem segredos, que precisa ser versionado
+!.env.example
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
+
+# drizzle-kit: o schema real vive em sql/ (ver sql/README.md). O config existe
+# apenas para o drizzle-kit ler src/db/schema.ts; esta pasta e artefato.
+drizzle/
 
 # misc
 .DS_Store
@@ -27,3 +34,4 @@ yarn-error.log*
 
 .vercel
 .env*
+!.env.example

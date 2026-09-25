@@ -34,6 +34,12 @@ alter table public.alunos
 create index if not exists alunos_etnia_idx on public.alunos (etnia);
 create index if not exists alunos_bairro_idx on public.alunos (bairro);
 
+-- Nota: uma versão anterior desta migration criava aqui
+--   alter table public.alunos add column if not exists professor_id uuid ...
+-- Essa coluna NUNCA foi criada em producao e nao e usada por nada
+-- (o vinculo professor fica em turmas.professor_id). Nao foi recriada aqui de
+-- proposito: um banco novo nao deve nascer com uma coluna morta.
+
 -- ============================================================
 -- 3) professor_id EM turmas
 -- ============================================================
@@ -49,13 +55,24 @@ create index if not exists turmas_professor_idx on public.turmas (professor_id);
 -- ============================================================
 
 -- 4.1) Insere professores que ainda não existem (por nome normalizado)
+--      O NOT EXISTS é obrigatório: "on conflict (id) do nothing" não protege
+--      nada aqui, porque o id é SERIAL e nunca conflita — sem o filtro, rodar
+--      esta migration de novo duplicaria todos os professores.
 insert into public.professores (nome, codigo)
 select distinct on (lower(regexp_replace(trim(t.professor), '[^[:alnum:][:space:]]', '', 'g')))
     trim(t.professor) as nome,
     t.professor_codigo as codigo
 from public.turmas t
 where t.professor is not null and trim(t.professor) <> ''
-on conflict (id) do nothing;
+  and not exists (
+      select 1
+      from public.professores p
+      where (t.professor_codigo is not null and p.codigo = t.professor_codigo)
+         or (t.professor_codigo is null
+             and lower(regexp_replace(trim(t.professor), '[^[:alnum:][:space:]]', '', 'g'))
+               = lower(regexp_replace(trim(p.nome), '[^[:alnum:][:space:]]', '', 'g')))
+  )
+on conflict do nothing;
 
 -- 4.2) Vínculo com turma: tenta por professor_codigo, senão por nome normalizado
 update public.turmas t

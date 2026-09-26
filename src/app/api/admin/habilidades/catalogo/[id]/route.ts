@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { getSessionUser } from "@/lib/auth";
-import { habilidadePorCodigo, habilidadePorDescricao } from "@/lib/habilidades-queries";
 import {
-  ETAPA_LABEL,
-  analisarCodigo,
+  habilidadePorCodigo,
+  habilidadePorDescricao,
+  habilidadePorIdentidade,
+} from "@/lib/habilidades-queries";
+import {
+  erroCoerenciaCodigo,
   normalizarCodigo,
   parseHabilidadePayload,
-  rotuloAno,
   type HabilidadeEtapa,
 } from "@/lib/habilidades-catalogo";
 
@@ -90,18 +92,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const novoAno = value.ano ?? atual.ano;
   if (novoCodigo !== atual.codigo) {
     // Coerência entre o novo código e a etapa/ano que ficarão gravados
-    const info = analisarCodigo(novoCodigo);
-    if (info?.etapa && info.etapa !== novaEtapa) {
-      return NextResponse.json(
-        { error: `O código ${novoCodigo} pertence a ${ETAPA_LABEL[info.etapa]}, mas a habilidade é da ${ETAPA_LABEL[novaEtapa]}.` },
-        { status: 400 }
-      );
-    }
-    if (info?.ano !== null && info?.ano !== undefined && info.ano !== novoAno) {
-      return NextResponse.json(
-        { error: `O código ${novoCodigo} é do ${rotuloAno(info.etapa ?? novaEtapa, info.ano)}, mas a habilidade é do ${rotuloAno(novaEtapa, novoAno)}.` },
-        { status: 400 }
-      );
+    const incoerente = erroCoerenciaCodigo(novoCodigo, novaEtapa, novoAno);
+    if (incoerente) {
+      return NextResponse.json({ error: incoerente }, { status: 400 });
     }
     const vinculadas = await contarQuestoes(atual.codigo);
     if (vinculadas > 0) {
@@ -113,6 +106,14 @@ export async function PATCH(req: Request, { params }: Ctx) {
     const existente = await habilidadePorCodigo(novoCodigo);
     if (existente) {
       return NextResponse.json({ error: `Já existe uma habilidade com o código ${novoCodigo}.` }, { status: 409 });
+    }
+    // Não criar uma segunda grafia para a mesma competência BNCC
+    const mesmaIdentidade = await habilidadePorIdentidade(novoCodigo);
+    if (mesmaIdentidade) {
+      return NextResponse.json(
+        { error: `Esta competência já está cadastrada com o código ${mesmaIdentidade.codigo}; use esse código em vez de ${novoCodigo}.` },
+        { status: 409 }
+      );
     }
   }
 

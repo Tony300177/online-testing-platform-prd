@@ -32,6 +32,8 @@ const ORDEM = [
   "migracao-importar-alunos-cpf.sql", // altera alunos
   "migracao-aplicacoes.sql", // cria aplicacoes (depende de provas)
   "migracao-habilidades.sql", // cria habilidades e altera questoes
+  // corretiva: canonicaliza códigos BNCC duplicados (depende de habilidades)
+  "migracao-corrigir-codigos-habilidade-duplicados.sql",
 ];
 
 const SQL_DIR = path.join(__dirname, "..", "sql");

@@ -96,6 +96,53 @@ export function analisarCodigo(
   return { etapa, ano, componente };
 }
 
+/**
+ * Identidade da habilidade dentro da BNCC, independente da grafia do ano.
+ *
+ * Só o último dígito do segmento de ano carrega o ano (ver `analisarCodigo`),
+ * então `EF05LP03`, `EF15LP03` e `EF35LP03` descrevem a MESMA habilidade: ano 5,
+ * Língua Portuguesa, 3º código. Dígitos diferentes nas dezenas são ruído de
+ * digitação que cria códigos duplicados no catálogo e fragmenta as estatísticas
+ * por habilidade (a mesma competência some em duas linhas do dashboard).
+ *
+ * Usado para reprovar no cadastro a criação de um segundo código para uma
+ * identidade já existente.
+ */
+export function identidadeHabilidade(codigo: string): string | null {
+  const m = HABILIDADE_CODIGO_REGEX.exec(normalizarCodigo(codigo));
+  if (!m) return null;
+  const [, sigla, , letras, sequencial] = m;
+  // "EF" + ano + "LP" + "03" -> "EF5LP03" (o dígito das dezenas é descartado)
+  return `${sigla}${anoSegmentoFinal(m[2])}${letras}${sequencial}`;
+}
+
+/** Último dígito do segmento de ano, normalizado como string. */
+function anoSegmentoFinal(anoSegmento: string): string {
+  return anoSegmento.slice(-1);
+}
+
+/**
+ * Confere se a etapa/ano informados são coerentes com o que o código BNCC
+ * declara. Aplicado no cadastro e na edição, para o mesmo código não poder ser
+ * gravado com etapa/ano conflitantes.
+ */
+export function erroCoerenciaCodigo(
+  codigo: string,
+  etapa: HabilidadeEtapa,
+  ano: number
+): string | null {
+  const alvo = normalizarCodigo(codigo);
+  const info = analisarCodigo(alvo);
+  if (!info) return null;
+  if (info.etapa && info.etapa !== etapa) {
+    return `O código ${alvo} pertence a ${ETAPA_LABEL[info.etapa]}, mas a habilidade é da ${ETAPA_LABEL[etapa]}.`;
+  }
+  if (info.ano !== null && info.ano !== ano) {
+    return `O código ${alvo} é do ${rotuloAno(info.etapa ?? etapa, info.ano)}, mas a habilidade é do ${rotuloAno(etapa, ano)}.`;
+  }
+  return null;
+}
+
 /* ============================================================
  * Validação do payload (criar/editar habilidade)
  * ============================================================ */

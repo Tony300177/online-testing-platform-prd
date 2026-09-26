@@ -5,10 +5,11 @@ import { getSessionUser } from "@/lib/auth";
 import {
   habilidadePorCodigo,
   habilidadePorDescricao,
+  habilidadePorIdentidade,
   listarHabilidades,
   type HabilidadeFiltros,
 } from "@/lib/habilidades-queries";
-import { parseHabilidadePayload } from "@/lib/habilidades-catalogo";
+import { erroCoerenciaCodigo, parseHabilidadePayload } from "@/lib/habilidades-catalogo";
 
 export const dynamic = "force-dynamic";
 
@@ -54,10 +55,30 @@ export async function POST(req: Request) {
   }
   const value = parsed.value;
 
+  // Coerência entre o código e a etapa/ano que serão gravados
+  const incoerente = erroCoerenciaCodigo(value.codigo!, value.etapa!, value.ano!);
+  if (incoerente) {
+    return NextResponse.json({ error: incoerente, errors: [incoerente] }, { status: 400 });
+  }
+
   const existente = await habilidadePorCodigo(value.codigo!);
   if (existente) {
     return NextResponse.json(
       { error: `Já existe uma habilidade cadastrada com o código ${value.codigo}.` },
+      { status: 409 }
+    );
+  }
+
+  // Uma mesma competência BNCC não pode ganhar duas grafias de código
+  // (ex.: EF05LP03 e EF35LP03 são ano 5 / LP / 3º código): isso duplica a
+  // habilidade no catálogo e parte as estatísticas por competência no dashboard.
+  const mesmaIdentidade = await habilidadePorIdentidade(value.codigo!);
+  if (mesmaIdentidade) {
+    return NextResponse.json(
+      {
+        error: `Esta competência já está cadastrada com o código ${mesmaIdentidade.codigo}. O ano faz parte da identidade do código BNCC; use ${mesmaIdentidade.codigo} em vez de ${value.codigo}.`,
+        errors: [`Identidade BNCC duplicada com ${mesmaIdentidade.codigo}.`],
+      },
       { status: 409 }
     );
   }

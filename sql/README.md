@@ -35,6 +35,7 @@ dispara — é preciso `NOT EXISTS` para o backfill não duplicar linhas.
 | `estrutura-provas.sql` | Tabelas de provas, questões, alternativas, respostas |
 | `migracao-aplicacoes.sql` | Tabela de aplicações (agendamento por turma) |
 | `migracao-habilidades.sql` | Catálogo BNCC + restaura `questoes.habilidade` para `text[]` |
+| `migracao-corrigir-codigos-habilidade-duplicados.sql` | Canonicaliza códigos BNCC com dígito de dezenas divergente (`EF35LP03` → `EF05LP03`) e inativa as entradas duplicadas |
 | `migracao-importacao-v2.sql` | Colunas de importação de escolas/turmas/professores |
 | `migracao-importar-alunos-cpf.sql` | CPF como chave de aluno |
 | `migracao-perfil-demografico.sql` | Perfil demográfico do admin |
@@ -68,11 +69,50 @@ Garantias em camadas:
 | Banco | `habilidade_codigos_validos()` — formato de cada elemento do array |
 | API | `exam-validation.ts` — normaliza (maiúsculas, sem duplicata) e exige que o código exista no catálogo |
 | API | publicação de prova exige ao menos uma habilidade em todas as questões |
+| API | `erroCoerenciaCodigo()` no cadastro e na edição: etapa/ano não podem conflitar com o que o código declara |
+| API | `identidadeHabilidade()` no cadastro e na edição: reprova uma segunda grafia da mesma competência (`EF35LP03` quando `EF05LP03` já existe) |
 | UI | o seletor só oferece habilidades ativas do catálogo |
 
 `descricao` começa vazia no seed (212 habilidades do Fundamental I de Língua
 Portuguesa e Matemática). Para preencher: **Habilidades > Consultar > "Só sem
 descrição"** e editar; a busca por descrição depende desse preenchimento.
+
+### Código BNCC: o ano é o último dígito
+
+No código `AAAAANNDD`, o ano/série é o **último** dígito do segmento `NN`:
+`EF05LP03` = ano 5, Língua Portuguesa, 3ª competência. Isso significa que
+`EF05LP03`, `EF15LP03` e `EF35LP03` são **a mesma competência** — o dígito das
+dezenas é ruído de digitação.
+
+Quando as duas grafias entram no catálogo, a consequência é silenciosa: a
+mesma competência passa a ter 2-3 entradas e as telas de análise mostram ela
+fatiada em linhas separadas, cada uma com parte dos acertos. Foi o que
+`migracao-corrigir-codigos-habilidade-duplicados.sql` resolveu (40 questões,
+672 respostas de alunos).
+
+Auditoria — deve retornar zero linhas:
+
+```sql
+SELECT
+  left(codigo, 2) || substring(codigo FROM 4 FOR 1)
+    || substring(codigo FROM 5 FOR 2) || substring(codigo FROM 7 FOR 2) AS identidade,
+  count(*) AS qtde,
+  array_agg(codigo ORDER BY codigo) AS codigos
+FROM habilidades
+WHERE ativo
+GROUP BY 1
+HAVING count(*) > 1;
+```
+
+O `CHECK` de formato não pega esse caso (a grafia é sintaticamente válida) e a
+regra do dígito de dezenas para o Fundamental II e o Médio não está
+documentada — por isso a auditoria é a rede de segurança, e não um `CHECK`.
+O bloqueio no cadastro é feito pela API, em `identidadeHabilidade()`.
+
+Pendência conhecida: `EF35LP29`, `EF35LP30` e `EF35LP31` continuam ativas
+porque não existe `EF05LP29/30/31` no catálogo — não há duplicata comprovada
+para inativar. São 3 competências sem uso; se a coordenação quiser as grafias
+canônicas, basta cadastrá-las e inativar estas pelo console.
 
 ## Convenção
 

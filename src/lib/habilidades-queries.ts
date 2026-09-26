@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   chaveComparacao,
+  identidadeHabilidade,
   normalizarCodigo,
   type HabilidadeCategoria,
   type HabilidadeComponente,
@@ -140,6 +141,30 @@ export async function codigosForaDoCatalogo(codigos: string[]): Promise<string[]
 export async function habilidadePorCodigo(codigo: string): Promise<{ id: number } | null> {
   const { rows } = await db.execute<{ id: number }>(sql`
     SELECT h.id AS "id" FROM habilidades h WHERE h.codigo = ${normalizarCodigo(codigo)} LIMIT 1
+  `);
+  return rows[0] ?? null;
+}
+
+/**
+ * Habilidade com a mesma identidade BNCC, mesmo com grafia diferente do ano
+ * (ex.: `EF35LP03` e `EF05LP03` são a mesma competência). Evita que uma segunda
+ * grafia do mesmo código BNCC entre no catálogo e fruture as estatísticas.
+ */
+export async function habilidadePorIdentidade(
+  codigo: string,
+  ignorarId?: number
+): Promise<{ id: number; codigo: string } | null> {
+  const identidade = identidadeHabilidade(codigo);
+  if (!identidade) return null;
+  const { rows } = await db.execute<{ id: number; codigo: string }>(sql`
+    SELECT h.id AS "id", h.codigo AS "codigo"
+    FROM habilidades h
+    WHERE left(h.codigo, 2)
+          || substring(h.codigo from 4 for 1)
+          || substring(h.codigo from 5 for 2)
+          || substring(h.codigo from 7 for 2) = ${identidade}
+      ${ignorarId !== undefined ? sql`AND h.id <> ${ignorarId}` : sql``}
+    LIMIT 1
   `);
   return rows[0] ?? null;
 }

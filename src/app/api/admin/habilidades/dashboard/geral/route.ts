@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { respostasAlunos, questoes, provas, turmas, escolas, alunos, desempenhoThresholds } from "@/db/schema";
+import { questoes, provas, turmas, escolas, alunos, desempenhoThresholds } from "@/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -37,8 +37,9 @@ export async function GET(req: Request) {
     const thresholds = thresholdRow ?? { verdeMin: 80, amareloMin: 60, laranjaMin: 40 };
 
     const conditions = [sql`q.habilidade IS NOT NULL AND cardinality(q.habilidade) > 0`];
-    if (provaId) conditions.push(eq(respostasAlunos.provaId, Number(provaId)));
-    if (escolaId) conditions.push(eq(respostasAlunos.escolaNome, (await db.select({ nome: escolas.nome }).from(escolas).where(eq(escolas.id, escolaId)).limit(1))[0]?.nome ?? ""));
+    // A query usa "FROM respostas_alunos ra": com alias, so o alias e valido.
+    if (provaId) conditions.push(sql`ra.prova_id = ${Number(provaId)}`);
+    if (escolaId) conditions.push(sql`ra.escola_nome = ${(await db.select({ nome: escolas.nome }).from(escolas).where(eq(escolas.id, escolaId)).limit(1))[0]?.nome ?? ""}`);
 
     // Query agregada por escola
     const { rows } = await db.execute(sql`
@@ -127,6 +128,9 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ ok: true, data: escolasData, thresholds });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+    // O Drizzle joga o erro do Postgres em cause; sem isso a resposta vinha
+    // truncada e nao dava para saber a causa real.
+    const detalhe = e instanceof Error && e.cause instanceof Error ? e.cause.message : e.message;
+    return NextResponse.json({ ok: false, error: detalhe }, { status: 500 });
   }
 }

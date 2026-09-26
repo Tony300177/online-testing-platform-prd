@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { respostasAlunos, questoes, provas, turmas, escolas, alunos, desempenhoThresholds } from "@/db/schema";
+import { questoes, provas, turmas, escolas, alunos, desempenhoThresholds } from "@/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -46,8 +46,9 @@ export async function GET(req: Request) {
       .limit(1);
     const thresholds = thresholdRow ?? { verdeMin: 80, amareloMin: 60, laranjaMin: 40 };
 
-    const conditions = [sql`q.habilidade IS NOT NULL AND cardinality(q.habilidade) > 0`, eq(respostasAlunos.turmaId, turmaId)];
-    if (provaId) conditions.push(eq(respostasAlunos.provaId, Number(provaId)));
+    // A query usa "FROM respostas_alunos ra": com alias, so o alias e valido.
+    const conditions = [sql`q.habilidade IS NOT NULL AND cardinality(q.habilidade) > 0`, sql`ra.turma_id = ${turmaId}`];
+    if (provaId) conditions.push(sql`ra.prova_id = ${Number(provaId)}`);
 
     const { rows } = await db.execute(sql`
       SELECT
@@ -161,6 +162,9 @@ export async function GET(req: Request) {
       }
     });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+    // O Drizzle joga o erro do Postgres em cause; sem isso a resposta vinha
+    // truncada e nao dava para saber a causa real.
+    const detalhe = e instanceof Error && e.cause instanceof Error ? e.cause.message : e.message;
+    return NextResponse.json({ ok: false, error: detalhe }, { status: 500 });
   }
 }

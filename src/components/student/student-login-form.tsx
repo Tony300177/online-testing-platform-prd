@@ -6,24 +6,26 @@ import { KeyRound, Loader2, Lock, LogIn, MapPin, School, UserRound, Users } from
 
 type Escola = { id: string; codigo: number | null; nome: string };
 type Turma = { id: string; nome: string; ano: string; turno: string };
-type Aluno = { id: string; nome: string; numeroChamada: number | null };
 
-/** Login do aluno em cascata: escola → turma → aluno → senha (dados do Supabase). */
+/**
+ * Login do aluno em cascata: escola → turma → nome → senha.
+ *
+ * O nome é digitado, não escolhido de uma lista: o endpoint de alunos por turma
+ * foi fechado porque permitia enumerar nome e número de chamada de toda a rede.
+ */
 export default function StudentLoginForm() {
   const router = useRouter();
 
   const [escolas, setEscolas] = useState<Escola[]>([]);
   const [turmas, setTurmas] = useState<Turma[]>([]);
-  const [alunos, setAlunos] = useState<Aluno[]>([]);
 
   const [escolaId, setEscolaId] = useState("");
   const [turmaId, setTurmaId] = useState("");
-  const [alunoId, setAlunoId] = useState("");
+  const [nome, setNome] = useState("");
   const [senha, setSenha] = useState("");
 
   const [loadingEscolas, setLoadingEscolas] = useState(true);
   const [loadingTurmas, setLoadingTurmas] = useState(false);
-  const [loadingAlunos, setLoadingAlunos] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -48,10 +50,9 @@ export default function StudentLoginForm() {
   function handleChangeEscola(value: string) {
     setEscolaId(value);
     setTurmaId("");
-    setAlunoId("");
+    setNome("");
     setSenha("");
     setTurmas([]);
-    setAlunos([]);
     setError("");
     if (!value) {
       setLoadingTurmas(false);
@@ -76,43 +77,23 @@ export default function StudentLoginForm() {
 
   function handleChangeTurma(value: string) {
     setTurmaId(value);
-    setAlunoId("");
+    setNome("");
     setSenha("");
-    setAlunos([]);
     setError("");
-    if (!value) {
-      setLoadingAlunos(false);
-      return;
-    }
-    setLoadingAlunos(true);
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    fetch(`/api/aluno/alunos?turmaId=${encodeURIComponent(value)}`, { signal: ctrl.signal })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!ctrl.signal.aborted && data?.ok) setAlunos(data.alunos ?? []);
-      })
-      .catch(() => {
-        if (!ctrl.signal.aborted) setAlunos([]);
-      })
-      .finally(() => {
-        if (!ctrl.signal.aborted) setLoadingAlunos(false);
-      });
   }
 
-  const canSubmit = Boolean(escolaId && turmaId && alunoId && senha) && !loading;
+  const canSubmit = Boolean(escolaId && turmaId && nome.trim() && senha) && !loading;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!escolaId || !turmaId || !alunoId || !senha) return;
+    if (!escolaId || !turmaId || !nome.trim() || !senha) return;
     setLoading(true);
     try {
       const res = await fetch("/api/aluno/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ escolaId, turmaId, alunoId, senha }),
+        body: JSON.stringify({ escolaId, turmaId, nome: nome.trim(), senha }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -199,33 +180,25 @@ export default function StudentLoginForm() {
 
           <div>
             <label className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-700">
-              <UserRound className="h-3.5 w-3.5 text-slate-400" /> Nome do aluno
+              <UserRound className="h-3.5 w-3.5 text-slate-400" /> Nome completo
             </label>
-            <select
-              value={alunoId}
+            <input
+              type="text"
+              value={nome}
               onChange={(e) => {
-                setAlunoId(e.target.value);
-                setSenha("");
+                setNome(e.target.value);
                 setError("");
               }}
-              disabled={!turmaId || loadingAlunos}
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-            >
-              <option value="" disabled>
-                {!turmaId
-                  ? "Selecione a turma primeiro"
-                  : loadingAlunos
-                    ? "Carregando alunos..."
-                    : alunos.length === 0
-                      ? "Nenhum aluno cadastrado nesta turma."
-                      : "Selecione o aluno"}
-              </option>
-              {alunos.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {`${String(a.numeroChamada ?? 0).padStart(3, "0")} — ${a.nome}`}
-                </option>
-              ))}
-            </select>
+              placeholder="Como consta na matrícula"
+              autoComplete="name"
+              disabled={!turmaId}
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+            />
+            <p className="mt-1.5 text-xs text-slate-400">
+              {turmaId
+                ? "Digite o nome exatamente como está na matrícula."
+                : "Selecione a turma primeiro."}
+            </p>
           </div>
 
           <div>
@@ -243,12 +216,12 @@ export default function StudentLoginForm() {
                 }}
                 placeholder="Senha informada pela escola"
                 autoComplete="current-password"
-                disabled={!alunoId}
+                disabled={!turmaId || !nome.trim()}
                 className="w-full rounded-xl border border-slate-300 py-3 pl-11 pr-4 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
               />
             </div>
             <p className="mt-1.5 text-xs text-slate-400">
-              {alunoId ? "Digite a senha informada pela escola." : "Senha padrão: 123456"}
+              A senha é a registrada pela escola. Em caso de dúvida, procure o professor.
             </p>
           </div>
         </div>

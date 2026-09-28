@@ -29,7 +29,7 @@ export type AlunoDetalhado = {
   sexo: string | null;
   etnia: string | null;
   bairro: string | null;
-  dataNascimento: Date | null;
+  dataNascimento: string | null;
   turmaId: string;
   turmaNome: string;
   turno: string | null;

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { fetchAlunosDetalhados, parseAlunoFilters, type AlunoDetalhado } from "@/lib/admin";
 import { getSessionUser } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
+import { todayInAppTz } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -119,7 +120,7 @@ export async function GET(req: Request) {
   }
 
   const buffer = Buffer.from(doc.output("arraybuffer"));
-  const name = `relatorio-alunos-${new Date().toISOString().slice(0, 10)}.pdf`;
+  const name = `relatorio-alunos-${todayInAppTz()}.pdf`;
 
   return new NextResponse(buffer, {
     headers: {

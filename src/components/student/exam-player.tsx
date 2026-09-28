@@ -93,6 +93,7 @@ export default function ExamPlayer({ code }: { code: string }) {
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
+  const [erroIdentificacao, setErroIdentificacao] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [alreadyDone, setAlreadyDone] = useState(false);
@@ -105,6 +106,20 @@ export default function ExamPlayer({ code }: { code: string }) {
   const autoSubmittedRef = useRef(false);
   const loadedRef = useRef(false);
   const storageKey = `${STORAGE_KEY_PREFIX}${code.toUpperCase()}`;
+
+  /**
+   * Diferenca entre o relogio do servidor e o do dispositivo. O cronometro
+   * usava `Date.now()` puro, entao um relogio de aluno adiantado atrasava
+   * mostraria tempo que o servidor ja_nao aceita. O servidor segue sendo a
+   * autoridade em isExamClosed(); isto so alinha a exibicao.
+   */
+  const clockSkewRef = useRef(0);
+  const syncClock = useCallback((serverNow: unknown) => {
+    if (typeof serverNow !== "string") return;
+    const t = new Date(serverNow).getTime();
+    if (Number.isFinite(t)) clockSkewRef.current = t - Date.now();
+  }, []);
+  const serverNow = useCallback(() => Date.now() + clockSkewRef.current, []);
 
   const hasPdf = Boolean(exam?.arquivoNome);
   const pdfUrl = appMode && identify.turmaId
@@ -123,6 +138,7 @@ export default function ExamPlayer({ code }: { code: string }) {
           setStage("notfound");
           return;
         }
+        syncClock(data.serverNow);
         if (data.alreadySubmitted && data.result && data.aluno) {
           setExam(data.exam);
           setAlreadyDone(true);
@@ -178,24 +194,46 @@ export default function ExamPlayer({ code }: { code: string }) {
     return () => {
       cancelled = true;
     };
-  }, [code]);
+  }, [code, syncClock]);
 
-  // Carrega as escolas/turmas/alunos reais para a identificação
+  // Escolas/turmas/alunos do escopo deste código, para a identificação.
+  // A lista vem filtrada pelas turmas que o código cobre: o código é a credencial.
+  // Falha aqui precisa aparecer na tela: antes o 403 era engolido e o aluno via
+  // só listas vazias, sem nenhuma explicação.
   useEffect(() => {
     if (appMode) return;
     let cancelled = false;
-    fetch("/api/escolas")
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled && data?.ok) setSchoolData(data.escolas);
+    setErroIdentificacao("");
+    fetch(`/api/escolas?codigo=${encodeURIComponent(code)}`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (!res.ok || !data?.ok) {
+          setSchoolData([]);
+          setErroIdentificacao(
+            data?.error ??
+              "Não foi possível carregar a lista de alunos desta prova. Verifique o código."
+          );
+          return;
+        }
+        const lista = Array.isArray(data.escolas) ? data.escolas : [];
+        setSchoolData(lista);
+        if (lista.length === 0) {
+          setErroIdentificacao(
+            "Esta prova ainda não tem turmas vinculadas. Fale com o professor que aplicou a prova."
+          );
+        }
       })
       .catch(() => {
-        /* mantém identificação livre se a consulta falhar */
+        if (!cancelled) {
+          setSchoolData([]);
+          setErroIdentificacao("Erro de conexão ao carregar a lista de alunos. Tente recarregar a página.");
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [appMode]);
+  }, [appMode, code]);
 
   const selectedEscola = schoolData.find((e) => e.id === identify.escolaId);
   const selectedTurma = selectedEscola?.turmas.find((t) => t.id === identify.turmaId);
@@ -272,17 +310,17 @@ export default function ExamPlayer({ code }: { code: string }) {
   // Cronômetro de tempo limite (envio automático ao zerar)
   useEffect(() => {
     if (stage !== "exam" || alreadyDone || !exam?.tempoMinutos) return;
-    const start = startedAt ?? Date.now();
+    const start = startedAt ?? serverNow();
     if (!startedAt) setStartedAt(start);
     const totalMs = exam.tempoMinutos * 60 * 1000;
     const tick = () => {
-      const left = start + totalMs - Date.now();
+      const left = start + totalMs - serverNow();
       setTimeLeft(Math.max(0, Math.ceil(left / 1000)));
     };
     tick();
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [stage, alreadyDone, exam?.tempoMinutos, startedAt]);
+  }, [stage, alreadyDone, exam?.tempoMinutos, startedAt, serverNow]);
 
   const answeredCount = useMemo(
     () =>
@@ -331,7 +369,12 @@ export default function ExamPlayer({ code }: { code: string }) {
       const res = await fetch("/api/aluno/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ alunoId: aluno.id, senha: identify.senha }),
+        body: JSON.stringify({
+          alunoId: aluno.id,
+          senha: identify.senha,
+          codigo: code,
+          turmaId: aluno.turmaId,
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -346,10 +389,12 @@ export default function ExamPlayer({ code }: { code: string }) {
     }
 
     // Aplicação: as questões são específicas da réplica da turma do aluno.
+    // A sessão foi aberta no verify acima, então o servidor já sabe quem é o aluno
+    // e a turma; a query leva só a turma, para escolher a réplica.
     if (appMode && questions.length === 0) {
       try {
         const res = await fetch(
-          `/api/prova/${encodeURIComponent(code)}?turmaId=${encodeURIComponent(aluno.turmaId)}&alunoId=${encodeURIComponent(aluno.id)}`
+          `/api/prova/${encodeURIComponent(code)}?turmaId=${encodeURIComponent(aluno.turmaId)}`
         );
         const data = await res.json();
         if (!res.ok || !data.ok) {
@@ -357,6 +402,7 @@ export default function ExamPlayer({ code }: { code: string }) {
           setVerifying(false);
           return;
         }
+        syncClock(data.serverNow);
         if (data.alreadySubmitted && data.result) {
           localStorage.removeItem(storageKey);
           setResult(data.result);
@@ -390,7 +436,7 @@ export default function ExamPlayer({ code }: { code: string }) {
       alunoId: aluno.id,
     }));
     setStage("exam");
-    if (!startedAt) setStartedAt(Date.now());
+    if (!startedAt) setStartedAt(serverNow());
     window.scrollTo({ top: 0 });
   }
 
@@ -437,7 +483,7 @@ export default function ExamPlayer({ code }: { code: string }) {
     setError("");
     setSubmitting(true);
     try {
-      const now = new Date().toISOString();
+      const now = new Date(serverNow()).toISOString();
       const res = await fetch("/api/submissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -479,7 +525,7 @@ export default function ExamPlayer({ code }: { code: string }) {
       setError("Erro de conexão. Suas respostas estão salvas — tente enviar novamente.");
       setSubmitting(false);
     }
-  }, [unanswered, questions, answers, identify, code, storageKey]);
+  }, [unanswered, questions, answers, identify, code, storageKey, serverNow]);
 
   // Envio automático quando o tempo zera
   useEffect(() => {
@@ -560,6 +606,11 @@ export default function ExamPlayer({ code }: { code: string }) {
           <p className="mt-1 text-xs text-slate-500">
             Selecione sua turma, seu nome na lista e digite a sua senha para acessar a prova.
           </p>
+          {erroIdentificacao && (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+              {erroIdentificacao}
+            </p>
+          )}
           <form onSubmit={startExam} className="mt-4 space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <Select
@@ -722,7 +773,7 @@ export default function ExamPlayer({ code }: { code: string }) {
 
   if (reviewing) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-indigo-50/70 via-slate-50 to-slate-100">
+      <div className="tema-crianca min-h-screen bg-gradient-to-b from-indigo-50/70 via-slate-50 to-slate-100">
         <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
             <div className="flex items-center gap-2.5">
@@ -834,7 +885,7 @@ export default function ExamPlayer({ code }: { code: string }) {
   // ------------------------- PROVA -------------------------
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-indigo-50/70 via-slate-50 to-slate-100">
+    <div className="tema-crianca min-h-screen bg-gradient-to-b from-indigo-50/70 via-slate-50 to-slate-100">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-7xl px-4 py-3">
           <div className="flex items-center justify-between gap-3">
@@ -1018,7 +1069,7 @@ export default function ExamPlayer({ code }: { code: string }) {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-indigo-900 via-indigo-700 to-violet-900 px-4 py-10">
+    <div className="tema-crianca flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-indigo-900 via-indigo-700 to-violet-900 px-4 py-10">
       <div className="mb-8 flex justify-center">
         <Logo className="h-24 w-auto" />
       </div>

@@ -26,6 +26,15 @@
 # apenas para o drizzle-kit ler src/db/schema.ts; esta pasta e artefato.
 drizzle/
 
+# dados pessoais (LGPD): a planilha de importação tem nome, data de nascimento e
+# bairro de todos os alunos da rede. Fica na máquina de quem importa, nunca no Git.
+planilha_*.xlsx
+*.xlsx
+*.xls
+*.csv
+cpfs*.txt
+scripts/cleanup-aluno-import.cjs
+
 # misc
 .DS_Store
 npm-debug.log*

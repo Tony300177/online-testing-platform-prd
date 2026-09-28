@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { fetchAlunosDetalhados, parseAlunoFilters, type AlunoDetalhado } from "@/lib/admin";
 import { formatDate } from "@/lib/utils";
+import { todayInAppTz } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,7 @@ function exportCsv(rows: AlunoDetalhado[]): NextResponse {
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="alunos-${new Date().toISOString().slice(0, 10)}.csv"`,
+      "Content-Disposition": `attachment; filename="alunos-${todayInAppTz()}.csv"`,
     },
   });
 }

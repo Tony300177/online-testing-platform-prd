@@ -10,6 +10,7 @@ import {
   Users,
 } from "lucide-react";
 import Logo from "@/components/logo";
+import { currentYearInAppTz } from "@/lib/datetime";
 
 export default function HomePage() {
   return (
@@ -149,7 +150,7 @@ export default function HomePage() {
             Dados dos alunos tratados com segurança e privacidade.
           </p>
           <div className="mt-6 flex flex-col items-center justify-between gap-2 border-t border-slate-100 pt-4 sm:flex-row">
-            <p className="text-sm text-slate-500">© {new Date().getFullYear()} SabeTudo — Secretaria Municipal de Educação.</p>
+            <p className="text-sm text-slate-500">© {currentYearInAppTz()} SabeTudo — Secretaria Municipal de Educação.</p>
             <p className="text-sm font-semibold text-slate-700">Desenvolvido pelo Departamento de Tecnologia/SME.</p>
           </div>
         </div>

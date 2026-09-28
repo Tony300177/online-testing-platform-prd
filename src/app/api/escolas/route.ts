@@ -1,8 +1,9 @@
-import { asc, eq, and, max } from "drizzle-orm";
+import { asc, eq, and, inArray, max } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { alunos, escolas, matriculas, turmas } from "@/db/schema";
 import { getSessionUser } from "@/lib/auth";
+import { resolverEscopoCodigo } from "@/lib/acesso-prova";
 
 export const dynamic = "force-dynamic";
 
@@ -86,17 +87,50 @@ export async function POST(req: Request) {
 }
 
 /**
- * Endpoint público usado na identificação do aluno (tela da prova).
- * Retorna escolas com suas turmas e os alunos matriculados no ano letivo.
+ * Escolas, turmas e alunos para a identificação na tela da prova.
+ *
+ * Antes isto era público e devolvia a rede inteira — 19 escolas, todas as turmas
+ * e os ~5.000 alunos — em um único GET sem autenticação. Agora exige uma das
+ * duas credenciais: sessão de professor/admin, ou o código da prova (que
+ * restringe o resultado às turmas que aquele código cobre).
  */
-export async function GET() {
-  const schools = await db.select().from(escolas).orderBy(asc(escolas.codigo));
+export async function GET(req: Request) {
+  const user = await getSessionUser();
 
-  const turmasRows = await db
+  const url = new URL(req.url);
+  const codigo = url.searchParams.get("codigo") ?? "";
+  const escopo = codigo ? await resolverEscopoCodigo(codigo) : null;
+
+  // Escopo do código: só as turmas que ele cobre. Sem turma no escopo (prova
+  // avulsa sem turma vinculada, ou código expirado) não há o que mostrar.
+  if (escopo && (!escopo.ok || escopo.turmaIds.length === 0)) {
+    return NextResponse.json({ error: "Código da prova inválido ou fora do prazo." }, { status: 403 });
+  }
+
+  // Sem sessão, o escopo tem de vir do código: é o que impede a enumeração da rede.
+  if (!user && !escopo?.ok) {
+    return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
+  }
+
+  const limiteTurmas = escopo?.ok ? escopo.turmaIds : null;
+
+  const todasTurmas = await db
     .select()
     .from(turmas)
     .where(eq(turmas.anoLetivo, ANO_LETIVO))
     .orderBy(asc(turmas.nome));
+  const turmasRows = user ? todasTurmas : todasTurmas.filter((t) => limiteTurmas!.includes(t.id));
+
+  // Escolas visíveis: as do escopo, mais as das turmas liberadas (a aplicação pode
+  // não ter linha em aplicacao_escolas; a turma sempre traz a escola dela).
+  const todasEscolas = await db.select().from(escolas).orderBy(asc(escolas.codigo));
+  const schools = user
+    ? todasEscolas
+    : todasEscolas.filter(
+        (e) =>
+          escopo!.ok &&
+          (escopo!.escolaIds.includes(e.id) || turmasRows.some((t) => t.escolaId === e.id))
+      );
 
   const matRows = await db
     .select({
@@ -108,7 +142,13 @@ export async function GET() {
     .from(matriculas)
     .innerJoin(alunos, eq(matriculas.alunoId, alunos.id))
     .where(
-      and(eq(matriculas.anoLetivo, ANO_LETIVO), eq(matriculas.status, "ativo"))
+      user
+        ? and(eq(matriculas.anoLetivo, ANO_LETIVO), eq(matriculas.status, "ativo"))
+        : and(
+            eq(matriculas.anoLetivo, ANO_LETIVO),
+            eq(matriculas.status, "ativo"),
+            inArray(matriculas.turmaId, limiteTurmas!)
+          )
     )
     .orderBy(asc(alunos.numeroChamada));
 

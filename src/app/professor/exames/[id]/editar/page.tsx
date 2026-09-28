@@ -6,12 +6,7 @@ import ExamForm, { type ProvaDraft, type QuestaoDraft } from "@/components/exam-
 import { db } from "@/db";
 import { alternativas, provas, questoes } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
-
-function toLocalInput(d: Date | null): string {
-  if (!d) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+import { toLocalInputValue } from "@/lib/datetime";
 
 export default async function EditExamPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser(["admin", "teacher"]);
@@ -39,8 +34,8 @@ export default async function EditExamPage({ params }: { params: Promise<{ id: s
     escolaId: prova.escolaId ?? "",
     turma: prova.turma,
     instrucoes: prova.instrucoes,
-    dataInicio: toLocalInput(prova.dataInicio),
-    dataFim: toLocalInput(prova.dataFim),
+    dataInicio: toLocalInputValue(prova.dataInicio),
+    dataFim: toLocalInputValue(prova.dataFim),
     tempoMinutos: prova.tempoMinutos,
     pdfName: prova.arquivoNome,
     questoes: qs.map(

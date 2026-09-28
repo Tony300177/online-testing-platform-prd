@@ -104,6 +104,7 @@ export async function POST(req: Request) {
     id: alunoId,
     nome: samePerson?.nome ?? nome,
     turma: turma.nome,
-    senha: STUDENT_DEFAULT_PASSWORD,
+    // A senha inicial nao volta na resposta: qualquer usuario logado que pudesse
+    // cadastrar aluno aprenderia a senha compartilhada de toda a rede.
   });
 }

@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { respostasAlunos, questoes, provas } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { requireApiAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const guard = await requireApiAdmin();
+  if ("response" in guard) return guard.response;
   try {
     const { searchParams } = new URL(req.url);
     const provaId = searchParams.get("provaId");

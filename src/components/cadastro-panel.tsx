@@ -114,7 +114,9 @@ export default function CadastroPanel({ initialEscolas }: { initialEscolas: Esco
         setError(data.error ?? "Não foi possível cadastrar o aluno.");
         return;
       }
-      setOk(`Aluno ${data.nome} cadastrado na ${data.turma}. Senha de acesso: ${data.senha}.`);
+      setOk(
+        `Aluno ${data.nome} cadastrado na ${data.turma}. A senha inicial é a mesma distribuída na importação — informe ao aluno.`
+      );
       setAlunoNome("");
       setAlunoChamada("");
       setAlunoMatricula("");

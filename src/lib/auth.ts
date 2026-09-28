@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { alunos, escolas, matriculas, turmas, users, type Aluno, type User } from "@/db/schema";
 
@@ -13,11 +14,37 @@ export const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 dias
 export const ALUNO_SESSION_COOKIE = "avalialab_aluno_session";
 export const ALUNO_SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 dias
 
-/** Senha padrão compartilhada dos alunos (pode ser trocada por variável de ambiente). */
-export const STUDENT_DEFAULT_PASSWORD = process.env.STUDENT_DEFAULT_PASSWORD || "123456";
+/**
+ * Lê uma variável de ambiente obrigatória. Sem valor, o processo não sobe: é
+ * preferível falhar no boot a emitir um segredo previsível em silêncio.
+ */
+function requiredEnv(name: string, hint: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} ausente. ${hint}`);
+  }
+  return value;
+}
 
-const SECRET =
-  process.env.SESSION_SECRET || "avalialab-dev-secret-troque-em-producao";
+/**
+ * Senha padrão dos alunos, usada na importação para gerar o hash inicial.
+ * OBRIGATÓRIA: sem valor definido nada é importado com uma senha previsível.
+ * Trocar a variável não muda a senha de quem já foi importado — o hash está em
+ * `alunos.senha_hash`.
+ */
+export const STUDENT_DEFAULT_PASSWORD = requiredEnv(
+  "STUDENT_DEFAULT_PASSWORD",
+  "Defina no .env.local uma senha forte; evite valores previsiveis como \"123456\" ou \"admin\"."
+);
+
+/**
+ * Segredo de assinatura das sessões. Sem fallback proposital: um segredo padrão
+ * allowlistaria forjar cookie de administrador a partir do código-fonte.
+ */
+const SECRET = requiredEnv(
+  "SESSION_SECRET",
+  "Gere com `openssl rand -base64 48` e defina no .env.local."
+);
 
 function sign(payload: string): string {
   return createHmac("sha256", SECRET).update(payload).digest("base64url");
@@ -29,17 +56,33 @@ export function createSessionToken(userId: number): string {
   return `${payload}.${sign(payload)}`;
 }
 
-/** Verifica a assinatura do token e retorna o userId ou null. */
-export function verifySessionToken(token: string): number | null {
+/** Confere a assinatura do token e que ele não expirou. Retorna o id ou null. */
+function verifySignedToken(token: string, maxAgeSeconds: number): string | null {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
+
+  const issuedAt = Number(parts[1]);
+  if (!Number.isFinite(issuedAt) || issuedAt <= 0) return null;
+
+  // Expiração validada no servidor: o maxAge do cookie não é garantia de nada,
+  // já que o token pode ser reapresentado com um cookie novo.
+  const age = Date.now() - issuedAt;
+  if (age < 0 || age > maxAgeSeconds * 1000) return null;
+
   const payload = `${parts[0]}.${parts[1]}`;
   const expected = Buffer.from(sign(payload));
   const received = Buffer.from(parts[2]);
   if (expected.length !== received.length || !timingSafeEqual(expected, received)) {
     return null;
   }
-  const userId = Number(parts[0]);
+  return parts[0];
+}
+
+/** Verifica a assinatura e a idade do token; retorna o userId ou null. */
+export function verifySessionToken(token: string): number | null {
+  const raw = verifySignedToken(token, SESSION_MAX_AGE);
+  if (raw === null) return null;
+  const userId = Number(raw);
   return Number.isFinite(userId) && userId > 0 ? userId : null;
 }
 
@@ -49,17 +92,10 @@ export function createAlunoSessionToken(alunoUuid: string): string {
   return `${payload}.${sign(payload)}`;
 }
 
-/** Verifica a assinatura e retorna o uuid do aluno ou null. */
+/** Verifica a assinatura e a idade do token; retorna o uuid do aluno ou null. */
 export function verifyAlunoSessionToken(token: string): string | null {
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const payload = `${parts[0]}.${parts[1]}`;
-  const expected = Buffer.from(sign(payload));
-  const received = Buffer.from(parts[2]);
-  if (expected.length !== received.length || !timingSafeEqual(expected, received)) {
-    return null;
-  }
-  const uuid = parts[0];
+  const uuid = verifySignedToken(token, ALUNO_SESSION_MAX_AGE);
+  if (uuid === null) return null;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid)
     ? uuid
     : null;
@@ -131,4 +167,32 @@ export async function requireAluno(): Promise<AlunoSession> {
   const aluno = await getSessionAluno();
   if (!aluno) redirect("/aluno");
   return aluno;
+}
+
+export type SessionGuard = { user: User } | { response: NextResponse };
+
+function unauthorized(message: string): { response: NextResponse } {
+  return { response: NextResponse.json({ error: message }, { status: 401 }) };
+}
+
+/**
+ * Guarda para route handlers: exige usuário logado e, opcionalmente, uma das roles
+ * permitidas. Usar no topo de toda API que devolve dados de professores/admins.
+ * `requireUser` redireciona e por isso não serve em handlers.
+ */
+export async function requireApiUser(allowed?: Role[]): Promise<SessionGuard> {
+  const user = await getSessionUser();
+  if (!user) return unauthorized("Não autorizado.");
+  if (allowed && !allowed.includes(user.role as Role)) return unauthorized("Não autorizado.");
+  return { user };
+}
+
+/** Atalho para as rotas exclusivas de administração. */
+export function requireApiAdmin(): Promise<SessionGuard> {
+  return requireApiUser(["admin"]);
+}
+
+/** Extrai o usuário de uma guarda já validada, ou null se a resposta for um 401. */
+export function guardUser(guard: SessionGuard): User | null {
+  return "user" in guard ? guard.user : null;
 }

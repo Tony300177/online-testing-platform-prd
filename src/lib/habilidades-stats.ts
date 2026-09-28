@@ -7,6 +7,7 @@ import {
   classificarPorLimiar,
   type Classificacao,
 } from "@/lib/habilidades-shared";
+import { dayBoundsUtc } from "@/lib/datetime";
 
 export { CLASSIFICACAO_COR, CLASSIFICACAO_LABEL, type Classificacao };
 
@@ -185,8 +186,16 @@ export async function getHabilidadesAnalise(filters: HabilidadeFilters = {}): Pr
   if (filters.turmaId) conditions.push(sql`ra.turma_id = ${filters.turmaId}`);
   if (filters.habilidade) conditions.push(sql`${filters.habilidade} = ANY(q.habilidade)`);
   if (filters.alunoId) conditions.push(sql`ra.aluno_id = ${filters.alunoId}`);
-  if (filters.periodoInicio) conditions.push(sql`ra.respondida_em >= ${filters.periodoInicio}::date`);
-  if (filters.periodoFim) conditions.push(sql`ra.respondida_em < (${filters.periodoFim}::date + interval '1 day')`);
+  // Limites do dia em APP_TZ como timestamptz explicito. O cast `::date`
+  // anterior dependia do TimeZone da sessao e cortava o dia 4h fora.
+  if (filters.periodoInicio) {
+    const b = dayBoundsUtc(filters.periodoInicio);
+    if (b) conditions.push(sql`ra.respondida_em >= ${b.start}`);
+  }
+  if (filters.periodoFim) {
+    const b = dayBoundsUtc(filters.periodoFim);
+    if (b) conditions.push(sql`ra.respondida_em < ${b.endExclusive}`);
+  }
   if (filters.etnia) conditions.push(sql`a.etnia = ${filters.etnia}`);
   if (filters.sexo) conditions.push(sql`a.sexo = ${filters.sexo}`);
   if (filters.bairro) conditions.push(sql`a.bairro = ${filters.bairro}`);

@@ -16,6 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDateTime } from "@/lib/datetime";
 
 type ProvaOption = {
   id: number;
@@ -136,8 +137,9 @@ export default function NovaAplicacaoWizard() {
         body: JSON.stringify({
           provaOrigemId: provaId,
           titulo: prova?.titulo,
-          dataInicio: dataInicio ? new Date(dataInicio).toISOString() : null,
-          dataFim: dataFim ? new Date(dataFim).toISOString() : null,
+          // Hora de parede crua: o servidor converte usando APP_TZ.
+          dataInicio: dataInicio || null,
+          dataFim: dataFim || null,
           turmaIds,
         }),
       });
@@ -400,9 +402,9 @@ export default function NovaAplicacaoWizard() {
             <div className="flex justify-between gap-4 py-2">
               <dt className="text-slate-500">Período</dt>
               <dd className="text-right text-slate-700">
-                {dataInicio ? new Date(dataInicio).toLocaleString("pt-BR") : "Sem data de início"}
+                {dataInicio ? formatDateTime(dataInicio) : "Sem data de início"}
                 {" → "}
-                {dataFim ? new Date(dataFim).toLocaleString("pt-BR") : "sem término"}
+                {dataFim ? formatDateTime(dataFim) : "sem término"}
               </dd>
             </div>
             <div className="flex justify-between gap-4 py-2">

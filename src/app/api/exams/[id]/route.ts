@@ -13,6 +13,7 @@ import {
   validateHabilidadesParaPublicar,
 } from "@/lib/exam-validation";
 import { generateSlug } from "@/lib/utils";
+import { parseLocalInput } from "@/lib/datetime";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -219,7 +220,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
         .set({
           status: "active",
           codigo: prova.codigo ?? generateSlug(),
-          dataFim: body.dataFim ? new Date(body.dataFim) : prova.dataFim,
+          dataFim: body.dataFim ? parseLocalInput(body.dataFim) : prova.dataFim,
         })
         .where(eq(provas.id, id));
     } else if (targetStatus === "finished" && prova.status === "active") {

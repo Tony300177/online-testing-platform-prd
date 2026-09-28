@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { turmas } from "@/db/schema";
 import { codigosForaDoCatalogo, listarQuestoesSemHabilidade } from "@/lib/habilidades-queries";
 import { normalizarCodigo } from "@/lib/habilidades-catalogo";
+import { parseLocalInput } from "@/lib/datetime";
 
 export type AlternativaInput = { letra: string; texto: string; correta: boolean };
 
@@ -51,14 +52,10 @@ export function parseProvaPayload(body: unknown): { ok: true; value: ProvaInput 
   const escolaId =
     typeof b.escolaId === "string" && b.escolaId.trim().length > 0 ? b.escolaId.trim() : null;
 
-  const toDate = (v: unknown): Date | null => {
-    const s = asString(v);
-    if (!s) return null;
-    const d = new Date(s);
-    return Number.isNaN(d.getTime()) ? null : d;
-  };
-  const dataInicio = toDate(b.dataInicio);
-  const dataFim = toDate(b.dataFim);
+  const dataInicio = parseLocalInput(b.dataInicio);
+  const dataFim = parseLocalInput(b.dataFim);
+  if (asString(b.dataInicio) && !dataInicio) errors.push("Data de início inválida.");
+  if (asString(b.dataFim) && !dataFim) errors.push("Data de término inválida.");
 
   const tempoMinutos =
     typeof b.tempoMinutos === "number" && Number.isFinite(b.tempoMinutos) && b.tempoMinutos > 0

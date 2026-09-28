@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { questoes, provas, turmas, escolas, alunos, desempenhoThresholds } from "@/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
+import { requireApiAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,8 @@ function getCorClassificacao(classif: string) {
 }
 
 export async function GET(req: Request) {
+  const guard = await requireApiAdmin();
+  if ("response" in guard) return guard.response;
   try {
     const { searchParams } = new URL(req.url);
     const escolaId = searchParams.get("escolaId");

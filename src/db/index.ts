@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
+import { APP_TZ } from "@/lib/datetime";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -19,6 +20,9 @@ export const pool =
     max: 2,
     idleTimeoutMillis: 10000,
     allowExitOnIdle: true,
+    // Sem isto a sessao usa o TimeZone do host (Supabase = UTC) e qualquer
+    // `::date`/`now()` sem fuso explicito passa a depender da maquina.
+    options: `-c timezone=${APP_TZ}`,
   });
 
 if (process.env.NODE_ENV !== "production") {

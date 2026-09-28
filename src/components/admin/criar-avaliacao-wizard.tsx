@@ -22,6 +22,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDateTime, parseLocalInput } from "@/lib/datetime";
 import HabilidadePicker from "@/components/admin/habilidade-picker";
 
 type AlternativaDraft = {
@@ -277,12 +278,24 @@ export default function CriarAvaliacaoWizard() {
       setStep(2);
       return;
     }
-    if (dataInicio && dataFim && new Date(dataInicio) > new Date(dataFim)) {
+    const inicioInstant = parseLocalInput(dataInicio);
+    const fimInstant = parseLocalInput(dataFim);
+    if (dataInicio && !inicioInstant) {
+      setError("Data de início inválida.");
+      setStep(1);
+      return;
+    }
+    if (dataFim && !fimInstant) {
+      setError("Data de término inválida.");
+      setStep(1);
+      return;
+    }
+    if (inicioInstant && fimInstant && inicioInstant.getTime() > fimInstant.getTime()) {
       setError("A data de início deve ser anterior à data final.");
       setStep(1);
       return;
     }
-    if (dataFim && new Date(dataFim).getTime() < Date.now()) {
+    if (fimInstant && fimInstant.getTime() < Date.now()) {
       setError("A data final precisa estar no futuro para publicar a avaliação.");
       setStep(1);
       return;
@@ -332,8 +345,11 @@ export default function CriarAvaliacaoWizard() {
         body: JSON.stringify({
           provaOrigemId: data.id,
           titulo: titulo.trim(),
-          dataInicio: dataInicio ? new Date(dataInicio).toISOString() : null,
-          dataFim: dataFim ? new Date(dataFim).toISOString() : null,
+          // Mesmo valor cru enviado ao passo 1: o servidor interpreta a hora
+          // de parede em APP_TZ. Enviar .toISOString() aqui fazia a aplicação
+          // divergir da prova base em ate 4 horas.
+          dataInicio: dataInicio || null,
+          dataFim: dataFim || null,
           turmaIds,
         }),
       });
@@ -843,9 +859,9 @@ export default function CriarAvaliacaoWizard() {
             <div className="flex justify-between gap-4 py-2">
               <dt className="text-slate-500">Período</dt>
               <dd className="text-right text-slate-700">
-                {dataInicio ? new Date(dataInicio).toLocaleString("pt-BR") : "Sem data de início"}
+                {dataInicio ? formatDateTime(dataInicio) : "Sem data de início"}
                 {" → "}
-                {dataFim ? new Date(dataFim).toLocaleString("pt-BR") : "sem término"}
+                {dataFim ? formatDateTime(dataFim) : "sem término"}
               </dd>
             </div>
             <div className="flex justify-between gap-4 py-2">

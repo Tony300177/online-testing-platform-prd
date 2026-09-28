@@ -1,36 +1,55 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { aplicacoes, provas } from "@/db/schema";
-import { isExamClosed } from "@/lib/utils";
+import { provas } from "@/db/schema";
+import { resolverEscopoCodigo } from "@/lib/acesso-prova";
+import { checarLimite, chavePorIp } from "@/lib/rate-limit";
 
 type Ctx = { params: Promise<{ code: string }> };
 
 /**
- * Endpoint público que entrega o arquivo PDF da prova para visualização.
- * Só está disponível enquanto a prova estiver ativa (mesma regra do acesso às questões).
- * Aceita código de uma prova publicada ou de uma aplicação (com ?turmaId= para a réplica).
+ * PDF da prova para visualização.
+ *
+ * Aplica as mesmas regras do código (publicada e dentro da janela) e exige que a
+ * turma da réplica esteja no escopo daquele código. Sai com `private, no-store`:
+ * o anterior era `public, max-age=3600`, o que deixava o gabarito da prova
+ * guardado em cache compartilhado e servido mesmo após o encerramento.
  */
 export async function GET(req: Request, { params }: Ctx) {
-  const code = ((await params).code ?? "").trim().toUpperCase();
-  const url = new URL(req.url);
-  const turmaId = url.searchParams.get("turmaId");
-
-  const [prova] = await db.select().from(provas).where(eq(provas.codigo, code)).limit(1);
-
-  let arquivo = prova;
-  if (!prova) {
-    const [aplicacao] = await db.select().from(aplicacoes).where(eq(aplicacoes.codigo, code)).limit(1);
-    if (aplicacao && turmaId) {
-      [arquivo] = await db
-        .select()
-        .from(provas)
-        .where(and(eq(provas.aplicacaoId, aplicacao.id), eq(provas.turmaId, turmaId)))
-        .limit(1);
-    }
+  const limite = checarLimite(chavePorIp(req, "prova-pdf"), 30);
+  if (!limite.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Muitas solicitações. Aguarde um instante." },
+      { status: 429 }
+    );
   }
 
-  if (!arquivo || arquivo.status === "draft" || isExamClosed(arquivo) || !arquivo.arquivoBase64) {
+  const code = ((await params).code ?? "").trim().toUpperCase();
+  const turmaId = new URL(req.url).searchParams.get("turmaId")?.trim() ?? "";
+
+  const escopo = await resolverEscopoCodigo(code);
+  if (!escopo.ok) {
+    return NextResponse.json({ ok: false, error: "Prova não encontrada." }, { status: 404 });
+  }
+
+  let arquivo: typeof provas.$inferSelect | undefined;
+
+  if (escopo.aplicacaoId === null) {
+    // Prova avulsa: o próprio código é a credencial.
+    [arquivo] = await db.select().from(provas).where(eq(provas.codigo, code)).limit(1);
+  } else {
+    // Aplicação: a réplica é por turma, e a turma precisa estar no escopo.
+    if (!turmaId || !escopo.turmaIds.includes(turmaId)) {
+      return NextResponse.json({ ok: false, error: "Prova não encontrada." }, { status: 404 });
+    }
+    [arquivo] = await db
+      .select()
+      .from(provas)
+      .where(and(eq(provas.aplicacaoId, escopo.aplicacaoId), eq(provas.turmaId, turmaId)))
+      .limit(1);
+  }
+
+  if (!arquivo?.arquivoBase64) {
     return NextResponse.json({ ok: false, error: "Prova não encontrada." }, { status: 404 });
   }
 
@@ -43,7 +62,7 @@ export async function GET(req: Request, { params }: Ctx) {
       "Content-Type": "application/pdf",
       "Content-Length": String(buffer.length),
       "Content-Disposition": `inline; filename="${safeName}"`,
-      "Cache-Control": "public, max-age=3600",
+      "Cache-Control": "private, no-store, max-age=0",
     },
   });
 }

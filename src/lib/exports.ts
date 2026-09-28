@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import { stripMarkdown } from "@/lib/markdown";
 import { buildCsv, formatDateTime, formatScore, LETTERS } from "@/lib/utils";
+import { todayInAppTz } from "@/lib/datetime";
 
 export type ExportFilters = {
   provaId?: number;
@@ -178,7 +179,7 @@ export async function buildSubmissionCsv(
 
   const csv = buildCsv(body.length > 0 ? [header, ...body] : [header]);
   const suffix = prova ? `-${prova.codigo ?? prova.id}` : "";
-  const name = `respostas${suffix}-${new Date().toISOString().slice(0, 10)}.csv`;
+  const name = `respostas${suffix}-${todayInAppTz()}.csv`;
   return { csv, filename: name };
 }
 

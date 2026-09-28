@@ -140,6 +140,23 @@ export async function GET(req: Request, { params }: Ctx) {
           { status: 400 }
         );
       }
+
+      // A turma precisa estar dentro da aplicação: sem esta checagem, um código
+      // válido + qualquer turmaId trazia a réplica (e o resultado) de outra turma.
+      if (!aluno) {
+        const [participante] = await db
+          .select({ turmaId: aplicacaoTurmas.turmaId })
+          .from(aplicacaoTurmas)
+          .where(and(eq(aplicacaoTurmas.aplicacaoId, aplicacao.id), eq(aplicacaoTurmas.turmaId, identificarTurmaId)))
+          .limit(1);
+        if (!participante) {
+          return NextResponse.json(
+            { ok: false, error: "Sua turma não está participando desta aplicação." },
+            { status: 403 }
+          );
+        }
+      }
+
       const [replica] = await db
         .select()
         .from(provas)
@@ -151,17 +168,20 @@ export async function GET(req: Request, { params }: Ctx) {
           { status: 403 }
         );
       }
-      const alunoIdParaResultado = aluno?.id ?? url.searchParams.get("alunoId") ?? null;
-      const [resultado] = alunoIdParaResultado
+
+      // O resultado só é lido para o aluno da sessão. A query string não escolhe
+      // mais de quem é a nota — antes qualquer um podia ler a nota de outro.
+      const [resultado] = aluno
         ? await db
             .select()
             .from(resultados)
-            .where(and(eq(resultados.provaId, replica.id), eq(resultados.alunoId, alunoIdParaResultado)))
+            .where(and(eq(resultados.provaId, replica.id), eq(resultados.alunoId, aluno.id)))
             .limit(1)
         : [];
       if (resultado) {
         return NextResponse.json({
           ok: true,
+          serverNow: new Date().toISOString(),
           aplicacao: true,
           closed: isExamClosed(replica),
           notOpen: notYetOpen(replica),
@@ -192,6 +212,7 @@ export async function GET(req: Request, { params }: Ctx) {
       }
       return NextResponse.json({
         ok: true,
+        serverNow: new Date().toISOString(),
         aplicacao: true,
         closed: isExamClosed(replica),
         notOpen,
@@ -251,6 +272,7 @@ export async function GET(req: Request, { params }: Ctx) {
     if (resultado) {
       return NextResponse.json({
         ok: true,
+        serverNow: new Date().toISOString(),
         closed,
         notOpen,
         alreadySubmitted: true,
@@ -270,6 +292,7 @@ export async function GET(req: Request, { params }: Ctx) {
     return NextResponse.json(
       {
         ok: true,
+        serverNow: new Date().toISOString(),
         closed: true,
         notOpen: false,
         aluno,
@@ -301,6 +324,7 @@ export async function GET(req: Request, { params }: Ctx) {
 
   return NextResponse.json({
     ok: true,
+    serverNow: new Date().toISOString(),
     closed: false,
     notOpen,
     aluno,

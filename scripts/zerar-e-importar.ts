@@ -5,13 +5,59 @@ import path from "node:path";
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
 const args = process.argv.slice(2);
-const file = args.find((a) => !a.startsWith("--")) ?? "planilha_unica_atualizada_com_escolas.xlsx";
+const file = args.find((a) => !a.startsWith("--")) ?? "planilha_PRE_I_PRE_II_e_DEMAIS.xlsx";
 const dry = args.includes("--dry");
 const noReset = args.includes("--no-reset");
+const reset = args.includes("--reset");
 const skip = args.includes("--resume");
 const chunkOpt = args.find((a) => a.startsWith("--chunk="));
 const CHUNK = chunkOpt ? Number(chunkOpt.split("=")[1]) : 150;
+const allowHostOpt = args.find((a) => a.startsWith("--allow-host="))?.split("=")[1] ?? "";
 const anoLetivo = 2026;
+
+/**
+ * O TRUNCATE deste script apaga Schools, turmas, alunos, matrículas, provas e
+ * resultados. Rodar com a DATABASE_URL apontando para produção destruiria a rede
+ * municipal inteira, então o reset exige a flag --reset e um host explicitamente
+ * autorizado.
+ */
+function podeResetar(): boolean {
+  if (noReset) return false;
+  if (dry) return false;
+
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    console.error("[ERRO] DATABASE_URL ausente. Nada será resetado.");
+    process.exit(1);
+  }
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    console.error("[ERRO] DATABASE_URL inválida. Nada será resetado.");
+    process.exit(1);
+  }
+
+  const local = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  const autorizado = allowHostOpt !== "" && host === allowHostOpt;
+  if (!local && !autorizado) {
+    console.error(
+      `[ERRO] Recusando reset em "${host}".\n` +
+        `       Use --allow-host=${host} para confirmar explicitamente, ou --no-reset.`
+    );
+    process.exit(1);
+  }
+
+  if (!reset) {
+    console.error(
+      "[ERRO] O reset do banco é destrutivo e exige a flag --reset.\n" +
+        "       Exemplo: npm run import:zerar -- --reset --allow-host=<host>\n" +
+        "       Para importar sem zerar, use --no-reset."
+    );
+    process.exit(1);
+  }
+  return true;
+}
 
 function norm(s: string): string {
   return String(s || "")
@@ -70,18 +116,24 @@ function matchCode(escolaRaw: string): number | null {
 
 async function lerPlanilha(): Promise<Record<string, string | number | null | undefined>[]> {
   const wb = XLSX.readFile(file);
-  const sheet = wb.Sheets["Importação"] ?? wb.Sheets[wb.SheetNames[0]];
-  if (!sheet) throw new Error("Aba 'Importação' não encontrada na planilha.");
-  const raw: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-  const headers = raw[0].map((h) => String(h || "").trim());
-  const dataRows = raw.slice(1).filter((row) => row.some((c) => c !== "" && c !== null));
-  return dataRows.map((row) => {
-    const obj: Record<string, string | number | null | undefined> = {};
-    headers.forEach((h, i) => {
-      obj[h] = row[i] !== undefined ? (row[i] as string | number | null) : "";
-    });
-    return obj;
-  });
+  if (!wb.SheetNames.length) throw new Error("Planilha sem abas.");
+
+  const todas: Record<string, string | number | null | undefined>[] = [];
+  for (const aba of wb.SheetNames) {
+    const raw: unknown[][] = XLSX.utils.sheet_to_json(wb.Sheets[aba], { header: 1, defval: "" });
+    if (!raw.length) continue;
+    const headers = raw[0].map((h) => String(h || "").trim());
+    const dataRows = raw.slice(1).filter((row) => row.some((c) => c !== "" && c !== null));
+    for (const row of dataRows) {
+      const obj: Record<string, string | number | null | undefined> = {};
+      headers.forEach((h, i) => {
+        obj[h] = row[i] !== undefined ? (row[i] as string | number | null) : "";
+      });
+      todas.push(obj);
+    }
+    console.log(`Aba "${aba}": ${dataRows.length} linhas de dados`);
+  }
+  return todas;
 }
 
 function resumo(report: { total: number; validas: number; avisos: number; erros: number; escrita?: unknown }) {
@@ -90,6 +142,10 @@ function resumo(report: { total: number; validas: number; avisos: number; erros:
 }
 
 (async () => {
+  // A guarda roda antes de qualquer import: se o reset não estiver explicitamente
+  // autorizado, o script para aqui sem nem carregar a camada de banco.
+  const vaiResetar = podeResetar();
+
   const { db } = await import("@/db");
   const { escolas } = await import("@/db/schema");
   const { eq, sql } = await import("drizzle-orm");
@@ -127,9 +183,17 @@ function resumo(report: { total: number; validas: number; avisos: number; erros:
     for (const [k, n] of naoAchou) console.log(`  "${k}" x${n}`);
   }
 
-  if (!dry && !noReset) {
+  if (!dry && vaiResetar) {
     console.log("\n--- RESET DO BANCO ---");
-    const c = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    // Validado antes de abrir a transação: nada de TRUNCATE com seed impossível.
+    const senhaAdmin = process.env.ADMIN_INITIAL_PASSWORD;
+    if (!senhaAdmin || senhaAdmin.length < 8) {
+      console.error(
+        "[ERRO] ADMIN_INITIAL_PASSWORD ausente ou com menos de 8 caracteres. Nada foi resetado."
+      );
+      process.exit(1);
+    }
+    const c = new Client({ connectionString: process.env.DATABASE_URL });
     await c.connect();
     await c.query("BEGIN");
     await c.query(`
@@ -139,7 +203,7 @@ function resumo(report: { total: number; validas: number; avisos: number; erros:
         questoes, respostas_alunos, resultados, turmas, users
       RESTART IDENTITY CASCADE
     `);
-    const hash = bcrypt.hashSync("123", 10);
+    const hash = bcrypt.hashSync(senhaAdmin, 10);
     await c.query(
       `INSERT INTO users (name, email, password_hash, role, school, created_at)
        VALUES ('admin@', 'admin@', $1, 'admin', 'Secretaria de Educação', now())`,
@@ -153,10 +217,8 @@ function resumo(report: { total: number; validas: number; avisos: number; erros:
     }
     await c.query("COMMIT");
     await c.end();
-    console.log("Banco zerado (users=admin@, escolas=19).");
+    console.log("Banco zerado (admin recriado a partir de ADMIN_INITIAL_PASSWORD, escolas=19).");
   }
-
-  const skip = args.includes("--resume");
 
   async function importarEscolaLocal(
     codigo: number,
@@ -263,7 +325,7 @@ function resumo(report: { total: number; validas: number; avisos: number; erros:
   }
 
   if (!dry) {
-    const c = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const c = new Client({ connectionString: process.env.DATABASE_URL });
     await c.connect();
     const t = await c.query(`SELECT
       (SELECT count(*) FROM escolas) escolas,

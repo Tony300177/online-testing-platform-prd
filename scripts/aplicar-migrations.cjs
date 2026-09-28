@@ -34,6 +34,9 @@ const ORDEM = [
   "migracao-habilidades.sql", // cria habilidades e altera questoes
   // corretiva: canonicaliza códigos BNCC duplicados (depende de habilidades)
   "migracao-corrigir-codigos-habilidade-duplicados.sql",
+  // integridade: um resultado por aluno/prova e um aluno por CPF (depende de
+  // resultados e da coluna cpf, criados acima)
+  "migracao-integridade-submissoes.sql",
 ];
 
 const SQL_DIR = path.join(__dirname, "..", "sql");

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { ESCOLAS_MUNICIPAIS, escolaLabel, escolaTipo } from "@/lib/municipal-schools";
 import { cn } from "@/lib/utils";
+import { todayInAppTz } from "@/lib/datetime";
 
 // Cabeçalhos típicos da planilha de ALUNOS — usados para sugerir a guia correta.
 const ALUNO_SMELL_HEADERS = new Set(
@@ -472,7 +473,7 @@ export default function ImportPanel({ onIrAlunos }: { onIrAlunos?: () => void })
             </button>
             <button
               type="button"
-              onClick={() => downloadCsv(buildErrorCsv(report), `validacao-${new Date().toISOString().slice(0, 10)}.csv`)}
+              onClick={() => downloadCsv(buildErrorCsv(report), `validacao-${todayInAppTz()}.csv`)}
               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             >
               <Download className="h-4 w-4" /> Baixar CSV de validação

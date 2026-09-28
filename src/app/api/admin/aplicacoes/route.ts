@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth";
 import { duplicateProvaForTurmas } from "@/lib/aplicacoes";
 import { validateHabilidadesDaProvaParaPublicar } from "@/lib/exam-validation";
 import { generateSlug } from "@/lib/utils";
+import { parseLocalInput } from "@/lib/datetime";
 
 /** Cria uma aplicação (agendamento de uma prova do banco para várias escolas/turmas). */
 export async function POST(req: Request) {
@@ -24,10 +25,10 @@ export async function POST(req: Request) {
   if (!provaOrigemId) return NextResponse.json({ error: "Selecione a prova do banco de provas." }, { status: 400 });
   if (turmaIds.length === 0) return NextResponse.json({ error: "Selecione ao menos uma turma." }, { status: 400 });
 
-  const dataInicio = body.dataInicio ? new Date(body.dataInicio) : null;
-  const dataFim = body.dataFim ? new Date(body.dataFim) : null;
-  if (dataInicio && Number.isNaN(dataInicio.getTime())) return NextResponse.json({ error: "Data de início inválida." }, { status: 400 });
-  if (dataFim && Number.isNaN(dataFim.getTime())) return NextResponse.json({ error: "Data de término inválida." }, { status: 400 });
+  const dataInicio = parseLocalInput(body.dataInicio);
+  const dataFim = parseLocalInput(body.dataFim);
+  if (body.dataInicio && !dataInicio) return NextResponse.json({ error: "Data de início inválida." }, { status: 400 });
+  if (body.dataFim && !dataFim) return NextResponse.json({ error: "Data de término inválida." }, { status: 400 });
 
   // Publicação: toda questão precisa ter ao menos uma habilidade vinculada
   const habError = await validateHabilidadesDaProvaParaPublicar(provaOrigemId);

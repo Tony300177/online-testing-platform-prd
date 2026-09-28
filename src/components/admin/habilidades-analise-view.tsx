@@ -36,6 +36,7 @@ import {
 } from "@/lib/habilidades-shared";
 import type { AlunoBreakdown, HabilidadeAgg, HabilidadeAnalise, GeneroBreakdown, EtniaBreakdown } from "@/lib/habilidades-stats";
 import { buildCsv } from "@/lib/utils";
+import { todayInAppTz } from "@/lib/datetime";
 
 const PIE_COLORS = { acertos: "#10b981", erros: "#f43f5e", naoRespondeu: "#94a3b8" };
 const GENERO_COLORS: Record<string, string> = { Masculino: "#3b82f6", Feminino: "#ec4899", "Não informado": "#94a3b8" };
@@ -240,7 +241,7 @@ export default function HabilidadesAnaliseView({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `analise-habilidades-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `analise-habilidades-${todayInAppTz()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }

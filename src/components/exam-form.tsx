@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseLocalInput, toLocalDateValue, toLocalInputValue, zonedTimeToUtc } from "@/lib/datetime";
 import HabilidadePicker from "@/components/admin/habilidade-picker";
 
 export type AlternativaDraft = {
@@ -62,19 +63,11 @@ const EMPTY_QUESTION = (): QuestaoDraft => ({
   ],
 });
 
+/** Dois dias a frente, as 18:00 no calendario de APP_TZ. */
 const DEFAULT_DATAFIM = () => {
-  const d = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
-  d.setHours(18, 0, 0, 0);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-
-const toLocalInput = (iso: string | null): string => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const day = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+  const [y, mo, d] = toLocalDateValue(day).split("-").map(Number);
+  return toLocalInputValue(zonedTimeToUtc(y, mo, d, 18, 0));
 };
 
 export default function ExamForm({
@@ -189,10 +182,17 @@ export default function ExamForm({
           return `Marque a alternativa correta da questão ${i + 1}.`;
       }
     }
-    if (requirePublish && draft.dataFim && new Date(draft.dataFim).getTime() < Date.now()) {
+    const inicioInstant = parseLocalInput(draft.dataInicio);
+    const fimInstant = parseLocalInput(draft.dataFim);
+    if (requirePublish && draft.dataFim && (!fimInstant || fimInstant.getTime() < Date.now())) {
       return "A data final precisa estar no futuro para publicar a prova.";
     }
-    if (requirePublish && draft.dataInicio && draft.dataFim && new Date(draft.dataInicio) > new Date(draft.dataFim)) {
+    if (
+      requirePublish &&
+      draft.dataInicio &&
+      draft.dataFim &&
+      (!inicioInstant || !fimInstant || inicioInstant.getTime() > fimInstant.getTime())
+    ) {
       return "A data de início deve ser anterior à data final.";
     }
     if (pdfFile) {
@@ -626,5 +626,3 @@ export default function ExamForm({
     </div>
   );
 }
-
-export { toLocalInput };

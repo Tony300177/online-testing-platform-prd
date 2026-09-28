@@ -7,6 +7,7 @@ import { alternativas, respostasAlunos } from "@/db/schema";
 import { getSessionUser } from "@/lib/auth";
 import { fetchExportData, hardestQuestions } from "@/lib/exports";
 import { formatDateTime } from "@/lib/utils";
+import { todayInAppTz } from "@/lib/datetime";
 
 /** Gera um relatório PDF formatado com resumo e lista de respostas. */
 export async function GET(req: Request) {
@@ -183,7 +184,7 @@ export async function GET(req: Request) {
   }
 
   const buffer = Buffer.from(doc.output("arraybuffer"));
-  const name = `relatorio${prova ? `-${prova.codigo ?? prova.id}` : ""}-${new Date().toISOString().slice(0, 10)}.pdf`;
+  const name = `relatorio${prova ? `-${prova.codigo ?? prova.id}` : ""}-${todayInAppTz()}.pdf`;
 
   return new NextResponse(buffer, {
     headers: {

@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { desempenhoThresholds } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { requireApiAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const guard = await requireApiAdmin();
+  if ("response" in guard) return guard.response;
   try {
     const { searchParams } = new URL(req.url);
     const escolaId = searchParams.get("escolaId");
@@ -23,6 +26,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const guard = await requireApiAdmin();
+  if ("response" in guard) return guard.response;
   try {
     const body = await req.json();
     const { escolaId, verdeMin, amareloMin, laranjaMin } = body;
@@ -55,6 +60,8 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  const guard = await requireApiAdmin();
+  if ("response" in guard) return guard.response;
   try {
     const body = await req.json();
     const { id, verdeMin, amareloMin, laranjaMin } = body;

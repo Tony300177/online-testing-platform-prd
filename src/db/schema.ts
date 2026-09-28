@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /* ============================================================
  * BANCO ESCOLAR (tabelas criadas via SQL — ver sql/banco-escolar-*.sql)
@@ -83,7 +84,7 @@ export const alunos = pgTable(
     sexo: text("sexo"), // "Masculino" | "Feminino"
     etnia: text("etnia"), // IBGE: Branca | Preta | Parda | Amarela | Indígena
     bairro: text("bairro"),
-    dataNascimento: date("data_nascimento", { mode: "date" }),
+    dataNascimento: date("data_nascimento", { mode: "string" }),
     senhaHash: text("senha_hash"), // login do aluno: hash bcrypt da senha (padrão compartilhado)
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -92,6 +93,8 @@ export const alunos = pgTable(
     index("alunos_cpf_idx").on(t.cpf),
     index("alunos_etnia_idx").on(t.etnia),
     index("alunos_bairro_idx").on(t.bairro),
+    // Dedupe da importação: sem unicidade, dois carregamentos criavam a mesma pessoa.
+    uniqueIndex("alunos_cpf_uniq").on(t.cpf).where(sql`${t.cpf} is not null and btrim(${t.cpf}) <> ''`),
   ]
 );
 
@@ -315,6 +318,10 @@ export const resultados = pgTable(
   (t) => [
     index("resultados_prova_idx").on(t.provaId),
     index("resultados_aluno_idx").on(t.alunoId),
+    // Fecha a corrida de duplo envio: o SELECT prévio em /api/submissions não basta.
+    uniqueIndex("resultados_prova_aluno_uniq")
+      .on(t.provaId, t.alunoId)
+      .where(sql`${t.alunoId} is not null`),
   ]
 );
 

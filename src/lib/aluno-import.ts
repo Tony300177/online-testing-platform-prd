@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import { STUDENT_DEFAULT_PASSWORD } from "@/lib/auth";
 import { normalize } from "@/lib/utils";
+import { parseLocalDate } from "@/lib/datetime";
 
 const DEFAULT_ANO_LETIVO = 2026;
 
@@ -102,30 +103,13 @@ export function isCPFValid(cpf: string): boolean {
   return calc(9) === Number(cpf[9]) && calc(10) === Number(cpf[10]);
 }
 
+/**
+ * Data de nascimento e data civil, nao instante: o fuso nao deve entrar.
+ * Antes isto montava meia-noite local e lia com `toISOString()` (UTC), o que
+ * voltava um dia em qualquer fuso a leste de UTC.
+ */
 function cleanDates(value: string | number | null | undefined): string | null {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number") {
-    // Número serial do Excel (data a partir de 01/01/1900)
-    const d = new Date(Math.round((value - 25569) * 86400000));
-    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-    return null;
-  }
-  const s = String(value).trim();
-  if (!s) return null;
-  const dmy = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
-  if (dmy) {
-    const [_, dd, mm, yyyy] = dmy;
-    const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-    return null;
-  }
-  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (iso) {
-    const [_, yyyy, mm, dd] = iso;
-    const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-  }
-  return null;
+  return parseLocalDate(value);
 }
 
 function cleanText(value: string | number | null | undefined): string {
@@ -168,13 +152,14 @@ export function normalizeEtnia(value: string): string | null {
   return null;
 }
 
-/** Converte "yyyy-mm-dd" (ou Date) para Date usado nos inserts do drizzle. */
-function toDate(value: string | Date | null | undefined): Date | null {
+/**
+ * Data civil pura, "YYYY-MM-DD". `alunos.data_nascimento` e `date` puro e o
+ * Drizzle envia a string sem conversao, entao o fuso nunca entra na conta.
+ */
+function toDateString(value: string | Date | null | undefined): string | null {
   if (!value) return null;
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return null;
-  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
+  return parseLocalDate(value);
 }
 
 /* ============================================================
@@ -526,9 +511,9 @@ export async function commitAlunoImport(rows: ImportAlunoLine[], options: AlunoI
         const patch: Partial<typeof alunos.$inferInsert> = {};
         if (item.cpf && aluno.cpf !== item.cpf) patch.cpf = item.cpf;
         if (item.inep && aluno.matricula !== item.inep) patch.matricula = item.inep;
-        const dataNova = toDate(item.dataNascimento);
-        const dataAtual = aluno.dataNascimento instanceof Date ? aluno.dataNascimento : toDate(String(aluno.dataNascimento ?? ""));
-        if (dataNova && (!dataAtual || dataAtual.getTime() !== dataNova.getTime())) {
+        const dataNova = toDateString(item.dataNascimento);
+        const dataAtual = toDateString(aluno.dataNascimento);
+        if (dataNova && dataNova !== dataAtual) {
           patch.dataNascimento = dataNova;
         }
         if (item.sexo && aluno.sexo !== item.sexo) patch.sexo = item.sexo;
@@ -548,7 +533,7 @@ export async function commitAlunoImport(rows: ImportAlunoLine[], options: AlunoI
             nome: item.nome,
             cpf: item.cpf ?? undefined,
             matricula: item.inep ?? undefined,
-            dataNascimento: toDate(item.dataNascimento) ?? undefined,
+            dataNascimento: toDateString(item.dataNascimento) ?? undefined,
             numeroChamada: item.numeroChamada ?? undefined,
             sexo: item.sexo ?? undefined,
             etnia: item.etnia ?? undefined,

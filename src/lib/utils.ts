@@ -1,37 +1,15 @@
 import { randomBytes } from "node:crypto";
 import type { Prova } from "@/db/schema";
 
+/**
+ * Formatacao de data mora em @/lib/datetime, que fixa o fuso da plataforma.
+ * Reexportada aqui porque os componentes ja importavam deste arquivo.
+ */
+export { formatDate, formatDateTime } from "@/lib/datetime";
+
 /** Combina classes CSS condicionalmente. */
 export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
-}
-
-const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
-
-const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-export function formatDate(value: Date | string | null | undefined): string {
-  if (!value) return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "—";
-  return dateFormatter.format(d);
-}
-
-export function formatDateTime(value: Date | string | null | undefined): string {
-  if (!value) return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "—";
-  return dateTimeFormatter.format(d);
 }
 
 /** Formata nota no padrão brasileiro (8,5). */

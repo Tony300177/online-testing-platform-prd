@@ -10,7 +10,7 @@ export default async function AlunoPage() {
   if (session) redirect("/aluno/painel");
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-indigo-900 via-indigo-700 to-violet-900">
+    <div className="tema-crianca flex min-h-screen flex-col bg-gradient-to-br from-indigo-900 via-indigo-700 to-violet-900">
       <header className="mx-auto w-full max-w-5xl px-4 py-4 sm:py-6">
         <Link href="/" className="inline-flex items-center">
           <Logo className="h-12 w-auto sm:h-16" />

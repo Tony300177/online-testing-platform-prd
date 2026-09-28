@@ -36,6 +36,7 @@ dispara — é preciso `NOT EXISTS` para o backfill não duplicar linhas.
 | `migracao-aplicacoes.sql` | Tabela de aplicações (agendamento por turma) |
 | `migracao-habilidades.sql` | Catálogo BNCC + restaura `questoes.habilidade` para `text[]` |
 | `migracao-corrigir-codigos-habilidade-duplicados.sql` | Canonicaliza códigos BNCC com dígito de dezenas divergente (`EF35LP03` → `EF05LP03`) e inativa as entradas duplicadas |
+| `migracao-integridade-submissoes.sql` | Um resultado por aluno/prova e um aluno por CPF (fecha corrida de duplo envio) |
 | `migracao-importacao-v2.sql` | Colunas de importação de escolas/turmas/professores |
 | `migracao-importar-alunos-cpf.sql` | CPF como chave de aluno |
 | `migracao-perfil-demografico.sql` | Perfil demográfico do admin |

@@ -1,32 +1,26 @@
 import autoTable from "jspdf-autotable";
 import { jsPDF } from "jspdf";
-import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { provas, turmas } from "@/db/schema";
-import { getSessionUser } from "@/lib/auth";
+import { requireApiAdmin } from "@/lib/auth";
 import {
   CLASSIFICACAO_LABEL,
   getHabilidadesAnalise,
   type HabilidadeFilters,
 } from "@/lib/habilidades-stats";
 import { formatDateTime } from "@/lib/utils";
+import { todayInAppTz } from "@/lib/datetime";
 
 /** Relatório PDF da análise de desempenho por habilidades. */
 export async function GET(req: Request) {
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
-  const userName = user.name;
-
-  // Professores só podem gerar relatórios das próprias provas.
-  let allowedProvaIds: number[] | undefined;
-  if (user.role === "teacher") {
-    const own = await db.select({ id: provas.id }).from(provas).where(eq(provas.professorId, user.id));
-    allowedProvaIds = own.map((p) => p.id);
-  }
+  const guard = await requireApiAdmin();
+  if ("response" in guard) return guard.response;
+  const userName = guard.user.name;
 
   const sp = new URL(req.url).searchParams;
-  const filters: HabilidadeFilters = { allowedProvaIds };
+  const filters: HabilidadeFilters = {};
   if (sp.get("provaId")) filters.provaId = Number(sp.get("provaId"));
   if (sp.get("turmaId")) filters.turmaId = sp.get("turmaId")!;
   if (sp.get("habilidade")) filters.habilidade = sp.get("habilidade")!;
@@ -252,7 +246,7 @@ export async function GET(req: Request) {
   return new NextResponse(buffer, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="analise-habilidades-${new Date().toISOString().slice(0, 10)}.pdf"`,
+      "Content-Disposition": `attachment; filename="analise-habilidades-${todayInAppTz()}.pdf"`,
     },
   });
 }

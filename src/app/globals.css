@@ -4,6 +4,55 @@
   background-color: #c7d2fe;
 }
 
+/* ============================================================
+   TEMA INFANTIL — "verde amanhecer"
+   Aplicado so nas telas do aluno (src/app/aluno, src/app/prova).
+   Professor e admin seguem com o visual serio.
+
+   O truque e sobrescrever variaveis de cor, nao trocar classe em
+   componente. No Tailwind v4 `bg-indigo-600` vira
+   `background-color: var(--color-indigo-600)`, e variavel de CSS
+   herda. Redefinindo a escala dentro de .tema-crianca, as 91 clases
+   indigo-* do lado do aluno mudam de cor sem uma linha de JSX
+   tocada — inclusive os gradientes `from-indigo-900 via-... to-...`,
+   que ja estavam nas paginas.
+
+   A escala verde e inclinada para o amarelo de proposito: o
+   emerald (usado para "acertou") fica azul-esverdeado e continua
+   distinguivel. Os tons 500-700 sao mais escuros que os do indigo
+   original porque varias classes viram TEXTO sobre branco
+   (ex.: text-indigo-600) e um verde medio nao passaria em AA.
+   ============================================================ */
+
+.tema-crianca {
+  --color-indigo-50: oklch(0.971 0.043 145);
+  --color-indigo-100: oklch(0.938 0.083 145);
+  --color-indigo-200: oklch(0.882 0.133 145);
+  --color-indigo-300: oklch(0.808 0.166 144);
+  --color-indigo-400: oklch(0.722 0.170 143);
+  --color-indigo-500: oklch(0.620 0.150 141);
+  --color-indigo-600: oklch(0.545 0.132 140);
+  --color-indigo-700: oklch(0.475 0.108 139);
+  --color-indigo-800: oklch(0.400 0.088 138);
+  --color-indigo-900: oklch(0.345 0.070 137);
+  --color-indigo-950: oklch(0.235 0.048 136);
+
+  /* Fim do gradiente: verde-azulado, o brilho de amanhecer. Fica
+     escuro o bastante para o texto branco do cabecalho. */
+  --color-violet-500: oklch(0.700 0.110 165);
+  --color-violet-600: oklch(0.640 0.115 165);
+  --color-violet-700: oklch(0.570 0.110 165);
+  --color-violet-800: oklch(0.490 0.098 164);
+  --color-violet-900: oklch(0.415 0.085 163);
+
+  --color-slate-50: oklch(0.985 0.006 140);
+  --color-slate-100: oklch(0.962 0.010 140);
+}
+
+.tema-crianca ::selection {
+  background-color: oklch(0.882 0.133 145);
+}
+
 html {
   scroll-behavior: smooth;
 }

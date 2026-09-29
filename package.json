@@ -6,7 +6,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrations:aplicar": "node scripts/aplicar-migrations.cjs --aplicar",
+    "migrations:verificar": "node scripts/verificar-idempotencia-migrations.cjs",
+    "limpar:provas": "node scripts/limpar-provas.cjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -26,15 +29,21 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
+    "@testcontainers/postgresql": "^12.2.0",
     "@types/node": "22.19.15",
     "@types/pg": "8.18.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@vitest/coverage-v8": "^5.0.2",
+    "dependency-cruiser": "^18.4.0",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
+    "madge": "^8.0.0",
     "postcss": "8.5.8",
     "tailwindcss": "4.1.17",
-    "typescript": "5.9.3"
+    "testcontainers": "^12.2.0",
+    "typescript": "5.9.3",
+    "vitest": "^5.0.2"
   }
 }

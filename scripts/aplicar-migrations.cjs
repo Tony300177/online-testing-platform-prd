@@ -17,29 +17,22 @@ const crypto = require("crypto");
 require("dotenv").config({ path: ".env.local" });
 
 /**
- * Ordem de aplicacao. O alfabeto nao serve: estrutura-provas referencia
- * turmas/escolas (criadas por banco-escolar) e aluno-login depende de alunos.
- * Qualquer arquivo fora desta lista entra no fim, em ordem alfabetica, com aviso.
+ * Ordem de aplicacao, lida de sql/ordem.json.
  *
- * Observacao: "users" NAO e criada aqui (vem do Supabase/Auth).
+ * A ordem mora em arquivo, e nao aqui, porque
+ * scripts/verificar-idempotencia-migrations.cjs precisa reaplicar exatamente a
+ * mesma lista. Com a ordem duplicada nos dois lugares, a verificacao passaria
+ * validando uma lista que o script nunca executa -- que e pior do nao verificar.
+ *
+ * O alfabeto nao serve: estrutura-provas referencia users/turmas/escolas,
+ * e desempenho-thresholds referencia escolas. Qualquer arquivo fora da lista
+ * entra no fim, em ordem alfabetica, com aviso.
  */
-const ORDEM = [
-  "banco-escolar-ceem-vasco-papa.sql", // base: escolas, turmas, alunos, matriculas
-  "estrutura-provas.sql", // base: provas, questoes, alternativas, respostas
-  "migracao-perfil-demografico.sql", // cria professores (depende de alunos)
-  "aluno-login.sql", // altera alunos (depende de banco-escolar)
-  "migracao-importacao-v2.sql", // altera escolas/professores/turmas
-  "migracao-importar-alunos-cpf.sql", // altera alunos
-  "migracao-aplicacoes.sql", // cria aplicacoes (depende de provas)
-  "migracao-habilidades.sql", // cria habilidades e altera questoes
-  // corretiva: canonicaliza códigos BNCC duplicados (depende de habilidades)
-  "migracao-corrigir-codigos-habilidade-duplicados.sql",
-  // integridade: um resultado por aluno/prova e um aluno por CPF (depende de
-  // resultados e da coluna cpf, criados acima)
-  "migracao-integridade-submissoes.sql",
-];
-
 const SQL_DIR = path.join(__dirname, "..", "sql");
+const ORDEM = JSON.parse(
+  fs.readFileSync(path.join(SQL_DIR, "ordem.json"), "utf8")
+).ordem.map((m) => m.arquivo);
+
 const args = process.argv.slice(2);
 const aplicar = args.includes("--aplicar");
 const marcarIdx = args.indexOf("--marcar");

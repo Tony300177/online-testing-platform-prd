@@ -1,0 +1,53 @@
+{
+  "_comentario": "Ordem de aplicacao das migrations. O alfabeto nao serve: estrutura-provas referencia users e turmas/escolas, e desempenho-thresholds referencia escolas. O script scripts/aplicar-migrations.cjs e os testes leem este arquivo, para que a ordem nao exista em dois lugares. Qualquer .sql novo que nao estiver aqui e aplicado por ultimo, em ordem alfabetica, com aviso no console.",
+  "ordem": [
+    {
+      "arquivo": "banco-escolar-ceem-vasco-papa.sql",
+      "porque": "base: escolas, turmas, alunos, matriculas"
+    },
+    {
+      "arquivo": "usuarios.sql",
+      "porque": "cria users, exigido por estrutura-provas (professor_id)"
+    },
+    {
+      "arquivo": "estrutura-provas.sql",
+      "porque": "base: provas, questoes, alternativas, respostas"
+    },
+    {
+      "arquivo": "migracao-perfil-demografico.sql",
+      "porque": "cria professores (depende de alunos)"
+    },
+    {
+      "arquivo": "aluno-login.sql",
+      "porque": "altera alunos (depende de banco-escolar)"
+    },
+    {
+      "arquivo": "migracao-importacao-v2.sql",
+      "porque": "altera escolas/professores/turmas"
+    },
+    {
+      "arquivo": "migracao-importar-alunos-cpf.sql",
+      "porque": "altera alunos"
+    },
+    {
+      "arquivo": "migracao-aplicacoes.sql",
+      "porque": "cria aplicacoes (depende de provas)"
+    },
+    {
+      "arquivo": "migracao-habilidades.sql",
+      "porque": "cria habilidades e altera questoes"
+    },
+    {
+      "arquivo": "migracao-corrigir-codigos-habilidade-duplicados.sql",
+      "porque": "canonicaliza codigos BNCC duplicados (depende de habilidades)"
+    },
+    {
+      "arquivo": "migracao-integridade-submissoes.sql",
+      "porque": "um resultado por aluno/prova e um aluno por CPF"
+    },
+    {
+      "arquivo": "desempenho-thresholds.sql",
+      "porque": "limiares por escola (depende de escolas)"
+    }
+  ]
+}
